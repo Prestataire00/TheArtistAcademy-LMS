@@ -1,0 +1,435 @@
+// ─── THE ARTIST ACADEMY LMS — PRISMA SCHEMA ───────────────────────────────────
+// Générateur et datasource
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  learner
+  trainer
+  admin
+  superadmin
+}
+
+enum PathwayMode {
+  linear
+  free
+}
+
+enum UAType {
+  video
+  quiz
+  resource
+}
+
+enum TranscodeStatus {
+  pending
+  processing
+  ready
+  error
+}
+
+enum CompletionStatus {
+  not_started
+  in_progress
+  completed
+}
+
+enum EnrollmentStatus {
+  future
+  active
+  closed
+}
+
+enum QuestionType {
+  mcq
+  truefalse
+  short
+}
+
+enum EventCategory {
+  sso
+  navigation
+  video
+  quiz
+  reminder
+  admin
+}
+
+enum ReminderStatus {
+  sent
+  failed
+  skipped
+}
+
+// ─── SSO CONFIG ───────────────────────────────────────────────────────────────
+
+model SsoConfig {
+  id             String   @id @default(cuid())
+  provider       String   @default("dendreo")
+  jwtPublicKey   String   @map("jwt_public_key") @db.Text
+  jwtAlgorithm   String   @default("RS256") @map("jwt_algorithm")
+  tokenTtlSeconds Int     @default(300) @map("token_ttl_seconds")
+  isActive       Boolean  @default(true) @map("is_active")
+  updatedBy      String?  @map("updated_by")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("sso_configs")
+}
+
+// Tokens JWT SSO déjà utilisés (protection replay, TTL géré par cron)
+model UsedJtiToken {
+  jti       String   @id
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("used_jti_tokens")
+}
+
+// ─── USERS & ENROLLMENTS ──────────────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  dendreoUserId  String?   @unique @map("dendreo_user_id")
+  email          String    @unique
+  fullName       String    @map("full_name")
+  role           UserRole  @default(learner)
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  lastSeenAt     DateTime? @map("last_seen_at")
+
+  enrollments    Enrollment[]
+  eventLogs      EventLog[]
+  reminderLogs   ReminderLog[]
+
+  @@index([email])
+  @@index([dendreoUserId])
+  @@map("users")
+}
+
+model Enrollment {
+  id                   String           @id @default(cuid())
+  userId               String           @map("user_id")
+  formationId          String           @map("formation_id")
+  dendreoEnrolmentId   String           @unique @map("dendreo_enrolment_id")
+  dendreoSessionId     String?          @map("dendreo_session_id")
+  startDate            DateTime         @map("start_date")
+  endDate              DateTime         @map("end_date")
+  status               EnrollmentStatus @default(future)
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  user                 User             @relation(fields: [userId], references: [id])
+  formation            Formation        @relation(fields: [formationId], references: [id])
+  uaProgresses         UAProgress[]
+  moduleProgresses     ModuleProgress[]
+  formationProgress    FormationProgress?
+  quizAttempts         QuizAttempt[]
+  reminderLogs         ReminderLog[]
+  eventLogs            EventLog[]
+
+  @@index([userId])
+  @@index([formationId])
+  @@index([dendreoSessionId])
+  @@index([status])
+  @@map("enrollments")
+}
+
+// ─── CATALOGUE PÉDAGOGIQUE ────────────────────────────────────────────────────
+
+model Formation {
+  id                        String      @id @default(cuid())
+  title                     String
+  description               String?     @db.Text
+  thumbnailUrl              String?     @map("thumbnail_url")
+  pathwayMode               PathwayMode @default(free) @map("pathway_mode")
+  videoCompletionThreshold  Int         @default(99) @map("video_completion_threshold")
+  isPublished               Boolean     @default(false) @map("is_published")
+  createdAt                 DateTime    @default(now()) @map("created_at")
+  updatedAt                 DateTime    @updatedAt @map("updated_at")
+
+  modules                   Module[]
+  enrollments               Enrollment[]
+  reminderRules             ReminderRule[]
+
+  @@map("formations")
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  formationId String   @map("formation_id")
+  title       String
+  description String?  @db.Text
+  position    Int
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  formation        Formation        @relation(fields: [formationId], references: [id], onDelete: Cascade)
+  uas              UA[]
+  moduleProgresses ModuleProgress[]
+
+  @@index([formationId, position])
+  @@map("modules")
+}
+
+model UA {
+  id          String   @id @default(cuid())
+  moduleId    String   @map("module_id")
+  title       String
+  type        UAType
+  position    Int
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  module       Module        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  videoContent VideoContent?
+  quiz         Quiz?
+  resource     Resource?
+  uaProgresses UAProgress[]
+
+  @@index([moduleId, position])
+  @@map("uas")
+}
+
+// ─── CONTENU PAR TYPE ─────────────────────────────────────────────────────────
+
+model VideoContent {
+  id              String          @id @default(cuid())
+  uaId            String          @unique @map("ua_id")
+  bunnyVideoId    String          @unique @map("bunny_video_id")
+  durationSeconds Int?            @map("duration_seconds")
+  hlsUrl          String?         @map("hls_url")
+  thumbnailUrl    String?         @map("thumbnail_url")
+  transcodeStatus TranscodeStatus @default(pending) @map("transcode_status")
+  uploadedAt      DateTime        @default(now()) @map("uploaded_at")
+
+  ua UA @relation(fields: [uaId], references: [id], onDelete: Cascade)
+
+  @@map("video_contents")
+}
+
+model Quiz {
+  id           String   @id @default(cuid())
+  uaId         String   @unique @map("ua_id")
+  title        String
+  instructions String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  ua        UA             @relation(fields: [uaId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id           String       @id @default(cuid())
+  quizId       String       @map("quiz_id")
+  questionText String       @map("question_text") @db.Text
+  type         QuestionType
+  position     Int
+  points       Int          @default(1)
+
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  choices QuizChoice[]
+  answers QuizAnswer[]
+
+  @@index([quizId, position])
+  @@map("quiz_questions")
+}
+
+model QuizChoice {
+  id         String  @id @default(cuid())
+  questionId String  @map("question_id")
+  choiceText String  @map("choice_text") @db.Text
+  isCorrect  Boolean @default(false) @map("is_correct")
+
+  question QuizQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  QuizAnswer[]
+
+  @@index([questionId])
+  @@map("quiz_choices")
+}
+
+model Resource {
+  id            String   @id @default(cuid())
+  uaId          String   @unique @map("ua_id")
+  fileName      String   @map("file_name")
+  fileUrl       String   @map("file_url")
+  fileType      String   @map("file_type")
+  fileSizeBytes Int?     @map("file_size_bytes")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+
+  ua UA @relation(fields: [uaId], references: [id], onDelete: Cascade)
+
+  @@map("resources")
+}
+
+// ─── PROGRESSION ──────────────────────────────────────────────────────────────
+
+model UAProgress {
+  id                   String           @id @default(cuid())
+  enrollmentId         String           @map("enrollment_id")
+  uaId                 String           @map("ua_id")
+  status               CompletionStatus @default(not_started)
+  videoPositionSeconds Int              @default(0) @map("video_position_seconds")
+  videoPercentWatched  Float            @default(0) @map("video_percent_watched")
+  timeSpentSeconds     Int              @default(0) @map("time_spent_seconds")
+  firstAccessedAt      DateTime?        @map("first_accessed_at")
+  completedAt          DateTime?        @map("completed_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  ua         UA         @relation(fields: [uaId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, uaId])
+  @@index([enrollmentId])
+  @@map("ua_progresses")
+}
+
+model ModuleProgress {
+  id               String           @id @default(cuid())
+  enrollmentId     String           @map("enrollment_id")
+  moduleId         String           @map("module_id")
+  status           CompletionStatus @default(not_started)
+  progressPercent  Float            @default(0) @map("progress_percent")
+  timeSpentSeconds Int              @default(0) @map("time_spent_seconds")
+  completedAt      DateTime?        @map("completed_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  module     Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, moduleId])
+  @@index([enrollmentId])
+  @@map("module_progresses")
+}
+
+model FormationProgress {
+  id                   String           @id @default(cuid())
+  enrollmentId         String           @unique @map("enrollment_id")
+  status               CompletionStatus @default(not_started)
+  progressPercent      Float            @default(0) @map("progress_percent")
+  timeSpentSeconds     Int              @default(0) @map("time_spent_seconds")
+  firstAccessedAt      DateTime?        @map("first_accessed_at")
+  lastActivityAt       DateTime?        @map("last_activity_at")
+  completedAt          DateTime?        @map("completed_at")
+  webhookLastSyncedAt  DateTime?        @map("webhook_last_synced_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@map("formation_progresses")
+}
+
+// ─── QUIZ TENTATIVES & RÉPONSES ───────────────────────────────────────────────
+
+model QuizAttempt {
+  id            String   @id @default(cuid())
+  enrollmentId  String   @map("enrollment_id")
+  quizId        String   @map("quiz_id")
+  attemptNumber Int      @map("attempt_number")
+  scorePercent  Float?   @map("score_percent")
+  submittedAt   DateTime @default(now()) @map("submitted_at")
+
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  quiz       Quiz        @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers    QuizAnswer[]
+
+  @@index([enrollmentId, quizId])
+  @@map("quiz_attempts")
+}
+
+model QuizAnswer {
+  id               String  @id @default(cuid())
+  attemptId        String  @map("attempt_id")
+  questionId       String  @map("question_id")
+  selectedChoiceId String? @map("selected_choice_id")
+  shortAnswerText  String? @map("short_answer_text") @db.Text
+  isCorrect        Boolean? @map("is_correct")
+
+  attempt        QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question       QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedChoice QuizChoice?  @relation(fields: [selectedChoiceId], references: [id])
+
+  @@index([attemptId])
+  @@map("quiz_answers")
+}
+
+// ─── LOGS & TRAÇABILITÉ (append-only) ────────────────────────────────────────
+
+model EventLog {
+  id           String        @id @default(cuid())
+  userId       String?       @map("user_id")
+  enrollmentId String?       @map("enrollment_id")
+  category     EventCategory
+  action       String
+  entityType   String?       @map("entity_type")
+  entityId     String?       @map("entity_id")
+  payload      Json?
+  ipAddress    String?       @map("ip_address")
+  userAgent    String?       @map("user_agent") @db.Text
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  user       User?       @relation(fields: [userId], references: [id])
+  enrollment Enrollment? @relation(fields: [enrollmentId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([category, createdAt])
+  @@index([enrollmentId, createdAt])
+  @@index([createdAt])
+  @@map("event_logs")
+}
+
+// ─── RELANCES EMAIL ───────────────────────────────────────────────────────────
+
+model ReminderRule {
+  id                   String   @id @default(cuid())
+  formationId          String?  @map("formation_id")
+  delayDays            Int      @map("delay_days")
+  sendWindowStartHour  Int      @default(8) @map("send_window_start_hour")
+  sendWindowEndHour    Int      @default(20) @map("send_window_end_hour")
+  templateId           String   @map("template_id")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdBy            String   @map("created_by")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  formation    Formation?    @relation(fields: [formationId], references: [id], onDelete: SetNull)
+  reminderLogs ReminderLog[]
+
+  @@map("reminder_rules")
+}
+
+model ReminderLog {
+  id              String         @id @default(cuid())
+  ruleId          String         @map("rule_id")
+  enrollmentId    String         @map("enrollment_id")
+  userId          String         @map("user_id")
+  templateId      String         @map("template_id")
+  templateVersion String?        @map("template_version")
+  status          ReminderStatus
+  errorMessage    String?        @map("error_message")
+  sentAt          DateTime       @default(now()) @map("sent_at")
+
+  rule       ReminderRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  enrollment Enrollment   @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id])
+
+  @@index([enrollmentId])
+  @@index([ruleId, sentAt])
+  @@map("reminder_logs")
+}

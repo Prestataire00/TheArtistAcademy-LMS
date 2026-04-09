@@ -1,0 +1,9 @@
+export type UserRole = 'learner' | 'trainer' | 'admin' | 'superadmin';
+export type PathwayMode = 'linear' | 'free';
+export type UAType = 'video' | 'quiz' | 'resource';
+export type CompletionStatus = 'not_started' | 'in_progress' | 'completed';
+export type EnrollmentStatus = 'future' | 'active' | 'closed';
+export type QuestionType = 'mcq' | 'truefalse' | 'short';
+export type EventCategory = 'sso' | 'navigation' | 'video' | 'quiz' | 'reminder' | 'admin';
+export type TranscodeStatus = 'pending' | 'processing' | 'ready' | 'error';
+export type ReminderStatus = 'sent' | 'failed' | 'skipped';
