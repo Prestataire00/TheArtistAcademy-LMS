@@ -177,8 +177,21 @@ export default function FormationPage() {
 
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{formation.title}</h1>
           {formation.description && (
-            <p className="text-gray-600 mb-6 leading-relaxed">{formation.description}</p>
+            <p className="text-gray-600 mb-4 leading-relaxed">{formation.description}</p>
           )}
+
+          {/* Tabs */}
+          <div className="flex gap-4 mb-6 border-b border-gray-200 -mx-6 px-6">
+            <span className="pb-2 border-b-2 border-brand-600 text-sm font-medium text-brand-700">
+              Modules
+            </span>
+            <a
+              href={`/formations/${formation.id}/ressources`}
+              className="pb-2 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Ressources
+            </a>
+          </div>
 
           {/* Progression globale */}
           <div className="mb-6">

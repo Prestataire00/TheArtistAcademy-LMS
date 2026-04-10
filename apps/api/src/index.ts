@@ -20,6 +20,7 @@ import { progressRouter } from './modules/progress/progress.router';
 import { enrollmentsRouter } from './modules/enrollments/enrollments.router';
 import { exportsRouter } from './modules/exports/exports.router';
 import { remindersRouter } from './modules/reminders/reminders.router';
+import { formateurRouter } from './modules/formateur/formateur.router';
 import { adminRouter } from './modules/admin/admin.router';
 import { webhooksRouter } from './modules/webhooks/webhooks.router';
 
@@ -56,6 +57,9 @@ api.use('/player', playerRouter);
 api.use('/player', playerQuizRouter);
 api.use('/player', playerResourcesRouter);
 api.use('/player', playerUAsRouter);
+
+// Formateur
+api.use('/formateur', formateurRouter);
 
 // Admin — autres
 api.use('/admin/exports', exportsRouter);

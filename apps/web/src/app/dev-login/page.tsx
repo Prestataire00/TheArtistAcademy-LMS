@@ -18,20 +18,32 @@ export default function DevLoginPage() {
     );
   }
 
-  async function login(role: 'learner' | 'admin') {
+  async function login(role: 'learner' | 'admin' | 'trainer') {
     setLoading(true);
     setError(null);
+
+    const emails: Record<string, string> = {
+      learner: 'test@artistacademy.fr',
+      admin: 'admin@artistacademy.fr',
+      trainer: 'formateur@artistacademy.fr',
+    };
+    const names: Record<string, string> = {
+      learner: 'Apprenant Test',
+      admin: 'Admin Test',
+      trainer: 'Formateur Test',
+    };
+    const redirects: Record<string, string> = {
+      learner: `/formations/${FORMATION_ID}`,
+      admin: '/admin',
+      trainer: '/formateur/sessions',
+    };
 
     try {
       const res = await fetch('/api/v1/auth/dev-login', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: role === 'admin' ? 'admin@artistacademy.fr' : 'test@artistacademy.fr',
-          role,
-          fullName: role === 'admin' ? 'Admin Test' : 'Apprenant Test',
-        }),
+        body: JSON.stringify({ email: emails[role], role, fullName: names[role] }),
       });
 
       if (!res.ok) {
@@ -41,12 +53,7 @@ export default function DevLoginPage() {
 
       const { token } = await res.json();
       localStorage.setItem('token', token);
-
-      if (role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push(`/formations/${FORMATION_ID}`);
-      }
+      router.push(redirects[role]);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
@@ -112,6 +119,25 @@ export default function DevLoginPage() {
             }}
           >
             {loading ? 'Connexion...' : "Se connecter en tant qu'apprenant test"}
+          </button>
+
+          <button
+            onClick={() => login('trainer')}
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '0.625rem 1rem',
+              backgroundColor: '#0369a1',
+              color: '#fff',
+              borderRadius: '8px',
+              border: 'none',
+              fontWeight: 500,
+              fontSize: '0.875rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+            }}
+          >
+            Se connecter en tant que formateur
           </button>
 
           <button

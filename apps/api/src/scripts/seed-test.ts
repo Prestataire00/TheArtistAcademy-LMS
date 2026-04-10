@@ -104,13 +104,36 @@ async function main() {
     data: { quizId: quiz.id, questionText: 'Decrivez votre artiste prefere en quelques mots', type: 'short', position: 2, points: 1 },
   });
 
+  // 8. UA resource + entrée Resource en base
+  const uaResource = await prisma.uA.create({
+    data: {
+      moduleId: module.id,
+      title: 'Guide pratique PDF',
+      type: 'resource',
+      position: 2,
+      isPublished: true,
+    },
+  });
+
+  const resource = await prisma.resource.create({
+    data: {
+      uaId: uaResource.id,
+      fileName: 'Guide_pratique.pdf',
+      fileUrl: 'resources/test.pdf',
+      fileType: 'application/pdf',
+      fileSizeBytes: 102400,
+    },
+  });
+
   console.log('Seed terminé :');
-  console.log(`  Formation : ${formation.id}`);
-  console.log(`  Module    : ${module.id}`);
-  console.log(`  UA video  : ${ua.id}`);
-  console.log(`  UA quiz   : ${uaQuiz.id}`);
-  console.log(`  User      : ${user.id} (${user.email})`);
-  console.log(`  Enrollment: ${enrollment.id}`);
+  console.log(`  Formation  : ${formation.id}`);
+  console.log(`  Module     : ${module.id}`);
+  console.log(`  UA video   : ${ua.id}`);
+  console.log(`  UA quiz    : ${uaQuiz.id}`);
+  console.log(`  UA resource: ${uaResource.id}`);
+  console.log(`  Resource   : ${resource.id}`);
+  console.log(`  User       : ${user.id} (${user.email})`);
+  console.log(`  Enrollment : ${enrollment.id}`);
 }
 
 main()
