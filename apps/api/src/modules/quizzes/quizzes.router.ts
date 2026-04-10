@@ -1,18 +1,25 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
+import { asyncHandler } from '../../shared/errors';
+import * as ctrl from './quizzes.controller';
 
-export const quizzesRouter = Router();
+// ─── Admin — Gestion quiz ─────────────────────────────────────────────────────
+export const adminQuizzesRouter = Router();
+adminQuizzesRouter.use(authenticate, requireRole('admin'));
 
-// Admin — gestion quiz
-quizzesRouter.put('/:id', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — modifier quiz' });
-});
+// PUT /api/v1/admin/uas/:id/quiz — Créer ou remplacer le quiz d'une UA
+adminQuizzesRouter.put('/uas/:id/quiz', asyncHandler(ctrl.adminUpsertQuiz));
 
-quizzesRouter.post('/:id/questions', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — ajouter question' });
-});
+// ─── Player — Quiz apprenant ──────────────────────────────────────────────────
+export const playerQuizRouter = Router();
+playerQuizRouter.use(authenticate, requireRole('learner'));
 
-quizzesRouter.put('/questions/:questionId', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — modifier question' });
-});
+// GET  /api/v1/player/uas/:id/quiz           — Charger quiz (sans isCorrect)
+playerQuizRouter.get('/uas/:id/quiz', asyncHandler(ctrl.playerGetQuiz));
+
+// POST /api/v1/player/uas/:id/quiz/submit    — Soumettre tentative
+playerQuizRouter.post('/uas/:id/quiz/submit', asyncHandler(ctrl.playerSubmit));
+
+// GET  /api/v1/player/uas/:id/quiz/attempts  — Historique tentatives
+playerQuizRouter.get('/uas/:id/quiz/attempts', asyncHandler(ctrl.playerGetAttempts));

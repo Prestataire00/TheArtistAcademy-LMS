@@ -8,11 +8,15 @@ import { errorHandler } from './shared/errors';
 
 // Routers
 import { authRouter } from './modules/auth/auth.router';
-import { formationsRouter } from './modules/formations/formations.router';
-import { uasRouter } from './modules/uas/uas.router';
+import { adminFormationsRouter } from './modules/formations/formations.router';
+import { adminModulesRouter } from './modules/modules/modules.router';
+import { adminUAsRouter } from './modules/uas/uas.router';
+import { adminVideosRouter, playerRouter } from './modules/videos/videos.router';
+import { adminQuizzesRouter, playerQuizRouter } from './modules/quizzes/quizzes.router';
+import { adminResourcesRouter, playerResourcesRouter } from './modules/resources/resources.router';
+import { playerFormationsRouter } from './modules/formations/formations.player.router';
+import { playerUAsRouter } from './modules/uas/uas.player.router';
 import { progressRouter } from './modules/progress/progress.router';
-import { quizzesRouter } from './modules/quizzes/quizzes.router';
-import { resourcesRouter } from './modules/resources/resources.router';
 import { enrollmentsRouter } from './modules/enrollments/enrollments.router';
 import { exportsRouter } from './modules/exports/exports.router';
 import { remindersRouter } from './modules/reminders/reminders.router';
@@ -35,11 +39,25 @@ app.use(requestLogger);
 const api = express.Router();
 
 api.use('/auth', authRouter);
-api.use('/formations', formationsRouter);
-api.use('/uas', uasRouter);
 api.use('/progress', progressRouter);
 api.use('/enrollments', enrollmentsRouter);
-api.use('/admin/formations', formationsRouter);
+
+// Admin — catalogue
+api.use('/admin/formations', adminFormationsRouter);
+api.use('/admin', adminModulesRouter);
+api.use('/admin', adminUAsRouter);
+api.use('/admin', adminVideosRouter);
+api.use('/admin', adminQuizzesRouter);
+api.use('/admin', adminResourcesRouter);
+
+// Player — apprenant
+api.use('/player', playerFormationsRouter);
+api.use('/player', playerRouter);
+api.use('/player', playerQuizRouter);
+api.use('/player', playerResourcesRouter);
+api.use('/player', playerUAsRouter);
+
+// Admin — autres
 api.use('/admin/exports', exportsRouter);
 api.use('/admin/reminder-rules', remindersRouter);
 api.use('/admin', adminRouter);

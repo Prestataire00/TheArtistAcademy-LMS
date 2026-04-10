@@ -42,6 +42,15 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * Wraps an async Express handler so thrown errors reach the error middleware.
+ */
+export function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    fn(req, res, next).catch(next);
+  };
+}
+
 // Middleware global de gestion des erreurs
 export function errorHandler(
   err: Error,

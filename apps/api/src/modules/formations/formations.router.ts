@@ -1,38 +1,25 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
+import * as ctrl from './formations.controller';
 
-export const formationsRouter = Router();
+export const adminFormationsRouter = Router();
+adminFormationsRouter.use(authenticate, requireRole('admin'));
 
-// ─── Apprenant ────────────────────────────────────────────────────────────────
-// GET /api/v1/formations/:id — Landing formation
-formationsRouter.get('/:id', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — landing formation' });
-});
+// GET    /api/v1/admin/formations          — Liste
+adminFormationsRouter.get('/', ctrl.list);
 
-// GET /api/v1/formations/:id/modules
-formationsRouter.get('/:id/modules', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — modules de la formation' });
-});
+// POST   /api/v1/admin/formations          — Créer
+adminFormationsRouter.post('/', ctrl.create);
 
-// GET /api/v1/formations/:id/resources
-formationsRouter.get('/:id/resources', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — ressources de la formation' });
-});
+// GET    /api/v1/admin/formations/:id      — Détail
+adminFormationsRouter.get('/:id', ctrl.detail);
 
-// ─── Admin CRUD ───────────────────────────────────────────────────────────────
-formationsRouter.get('/', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — liste catalogue' });
-});
+// PUT    /api/v1/admin/formations/:id      — Modifier
+adminFormationsRouter.put('/:id', ctrl.update);
 
-formationsRouter.post('/', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — créer formation' });
-});
+// DELETE /api/v1/admin/formations/:id      — Supprimer
+adminFormationsRouter.delete('/:id', ctrl.remove);
 
-formationsRouter.put('/:id', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — modifier formation' });
-});
-
-formationsRouter.delete('/:id', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — supprimer formation' });
-});
+// POST   /api/v1/admin/formations/:id/duplicate — Dupliquer
+adminFormationsRouter.post('/:id/duplicate', ctrl.duplicate);

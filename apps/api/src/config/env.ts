@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -10,30 +11,27 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('8h'),
 
-  // SSO Dendreo
-  DENDREO_JWT_PUBLIC_KEY: z.string().min(1),
+  // SSO Dendreo (optionnel en dev — clé publique pas encore fournie)
+  DENDREO_JWT_PUBLIC_KEY: z.string().default(''),
   DENDREO_JWT_ALGORITHM: z.string().default('RS256'),
   DENDREO_JWT_EXPIRY_TOLERANCE_SECONDS: z.coerce.number().default(30),
 
-  // Bunny.net
-  BUNNY_API_KEY: z.string().min(1),
-  BUNNY_LIBRARY_ID: z.string().min(1),
-  BUNNY_STREAM_HOSTNAME: z.string().min(1),
-  BUNNY_STORAGE_ZONE: z.string().min(1),
-  BUNNY_STORAGE_API_KEY: z.string().min(1),
-  BUNNY_CDN_HOSTNAME: z.string().min(1),
-  BUNNY_SIGNED_URL_SECRET: z.string().min(1),
-  BUNNY_WEBHOOK_SECRET: z.string().min(1),
+  // Supabase
+  SUPABASE_URL: z.string().url().default('http://localhost'),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().default(''),
+  SUPABASE_STORAGE_BUCKET: z.string().default('videos'),
+  SUPABASE_RESOURCES_BUCKET: z.string().default('resources'),
+  SUPABASE_SIGNED_URL_EXPIRES_IN: z.coerce.number().default(7200), // 2h en secondes
 
-  // Email
-  BREVO_API_KEY: z.string().min(1),
-  EMAIL_FROM_ADDRESS: z.string().email(),
+  // Email (optionnel en dev)
+  BREVO_API_KEY: z.string().default(''),
+  EMAIL_FROM_ADDRESS: z.string().default('dev@localhost'),
   EMAIL_FROM_NAME: z.string().default('The Artist Academy'),
 
   // URLs
-  API_URL: z.string().url(),
-  WEB_URL: z.string().url(),
-  CORS_ORIGIN: z.string().min(1),
+  API_URL: z.string().url().default('http://localhost:3001'),
+  WEB_URL: z.string().url().default('http://localhost:3000'),
+  CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
   // Webhooks Dendreo
   DENDREO_WEBHOOK_URL: z.string().url().optional(),

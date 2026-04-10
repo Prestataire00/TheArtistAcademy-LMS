@@ -1,47 +1,22 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
+import * as ctrl from './uas.controller';
 
-export const uasRouter = Router();
+export const adminUAsRouter = Router();
+adminUAsRouter.use(authenticate, requireRole('admin'));
 
-// GET /api/v1/uas/:id/quiz
-uasRouter.get('/:id/quiz', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — charger quiz' });
-});
+// GET    /api/v1/admin/modules/:moduleId/uas   — Liste UAs d'un module
+adminUAsRouter.get('/modules/:moduleId/uas', ctrl.list);
 
-// POST /api/v1/uas/:id/quiz/attempts
-uasRouter.post('/:id/quiz/attempts', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — soumettre tentative quiz' });
-});
+// POST   /api/v1/admin/uas                     — Créer
+adminUAsRouter.post('/uas', ctrl.create);
 
-// GET /api/v1/uas/:id/quiz/attempts
-uasRouter.get('/:id/quiz/attempts', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — historique tentatives' });
-});
+// GET    /api/v1/admin/uas/:id                 — Détail
+adminUAsRouter.get('/uas/:id', ctrl.detail);
 
-// POST /api/v1/uas/:id/video/token — Obtenir URL signée HLS
-uasRouter.post('/:id/video/token', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — signed URL vidéo' });
-});
+// PUT    /api/v1/admin/uas/:id                 — Modifier
+adminUAsRouter.put('/uas/:id', ctrl.update);
 
-// GET /api/v1/uas/:id/resource/download
-uasRouter.get('/:id/resource/download', authenticate, (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — URL signée ressource' });
-});
-
-// ─── Admin ────────────────────────────────────────────────────────────────────
-uasRouter.post('/', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — créer UA' });
-});
-
-uasRouter.put('/:id', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — modifier UA' });
-});
-
-uasRouter.delete('/:id', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — supprimer UA' });
-});
-
-uasRouter.post('/:id/video/upload', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 1 — initier upload vidéo' });
-});
+// DELETE /api/v1/admin/uas/:id                 — Supprimer
+adminUAsRouter.delete('/uas/:id', ctrl.remove);

@@ -58,6 +58,48 @@ export interface FormationProgressDto {
   modules: ModuleProgressDto[];
 }
 
+// ─── Admin — Catalogue ────────────────────────────────────────────────────────
+
+export interface AdminFormationDto {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  pathwayMode: 'linear' | 'free';
+  videoCompletionThreshold: number;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+  modulesCount: number;
+}
+
+export interface AdminFormationDetailDto extends Omit<AdminFormationDto, 'modulesCount'> {
+  modules: AdminModuleDto[];
+}
+
+export interface AdminModuleDto {
+  id: string;
+  formationId: string;
+  title: string;
+  description: string | null;
+  position: number;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+  uas: AdminUADto[];
+}
+
+export interface AdminUADto {
+  id: string;
+  moduleId: string;
+  title: string;
+  type: UAType;
+  position: number;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Quiz ─────────────────────────────────────────────────────────────────────
 
 export interface QuizChoiceDto {

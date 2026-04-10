@@ -31,13 +31,6 @@ enum UAType {
   resource
 }
 
-enum TranscodeStatus {
-  pending
-  processing
-  ready
-  error
-}
-
 enum CompletionStatus {
   not_started
   in_progress
@@ -206,14 +199,15 @@ model UA {
 // ─── CONTENU PAR TYPE ─────────────────────────────────────────────────────────
 
 model VideoContent {
-  id              String          @id @default(cuid())
-  uaId            String          @unique @map("ua_id")
-  bunnyVideoId    String          @unique @map("bunny_video_id")
-  durationSeconds Int?            @map("duration_seconds")
-  hlsUrl          String?         @map("hls_url")
-  thumbnailUrl    String?         @map("thumbnail_url")
-  transcodeStatus TranscodeStatus @default(pending) @map("transcode_status")
-  uploadedAt      DateTime        @default(now()) @map("uploaded_at")
+  id              String   @id @default(cuid())
+  uaId            String   @unique @map("ua_id")
+  storagePath     String   @map("storage_path")
+  originalName    String   @map("original_name")
+  mimeType        String   @default("video/mp4") @map("mime_type")
+  fileSizeBytes   Int?     @map("file_size_bytes")
+  durationSeconds Int?     @map("duration_seconds")
+  thumbnailUrl    String?  @map("thumbnail_url")
+  uploadedAt      DateTime @default(now()) @map("uploaded_at")
 
   ua UA @relation(fields: [uaId], references: [id], onDelete: Cascade)
 
