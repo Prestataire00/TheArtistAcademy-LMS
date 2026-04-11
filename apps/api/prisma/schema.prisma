@@ -101,9 +101,10 @@ model User {
   createdAt      DateTime  @default(now()) @map("created_at")
   lastSeenAt     DateTime? @map("last_seen_at")
 
-  enrollments    Enrollment[]
-  eventLogs      EventLog[]
-  reminderLogs   ReminderLog[]
+  enrollments         Enrollment[]
+  eventLogs            EventLog[]
+  reminderLogs         ReminderLog[]
+  trainerFormations    Formation[] @relation("TrainerFormations")
 
   @@index([email])
   @@index([dendreoUserId])
@@ -148,13 +149,16 @@ model Formation {
   pathwayMode               PathwayMode @default(free) @map("pathway_mode")
   videoCompletionThreshold  Int         @default(99) @map("video_completion_threshold")
   isPublished               Boolean     @default(false) @map("is_published")
+  trainerId                 String?     @map("trainer_id")
   createdAt                 DateTime    @default(now()) @map("created_at")
   updatedAt                 DateTime    @updatedAt @map("updated_at")
 
+  trainer                   User?       @relation("TrainerFormations", fields: [trainerId], references: [id])
   modules                   Module[]
   enrollments               Enrollment[]
   reminderRules             ReminderRule[]
 
+  @@index([trainerId])
   @@map("formations")
 }
 

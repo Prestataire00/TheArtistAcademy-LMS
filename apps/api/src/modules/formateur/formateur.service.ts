@@ -2,12 +2,12 @@ import { prisma } from '../../config/database';
 import { NotFoundError } from '../../shared/errors';
 
 /**
- * Liste les formations avec enrollments (sessions) visibles par le formateur.
- * V1 : un formateur voit toutes les formations ayant au moins un enrollment.
+ * Liste les formations dont le formateur est responsable (trainerId),
+ * avec enrollments actifs.
  */
-export async function listSessions() {
+export async function listSessions(trainerId: string) {
   const formations = await prisma.formation.findMany({
-    where: { enrollments: { some: {} } },
+    where: { trainerId, enrollments: { some: {} } },
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { modules: true } },

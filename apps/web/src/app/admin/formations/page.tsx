@@ -1,0 +1,237 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { api } from '@/lib/api';
+
+interface Formation {
+  id: string;
+  title: string;
+  description: string | null;
+  pathwayMode: string;
+  videoCompletionThreshold: number;
+  isPublished: boolean;
+  modulesCount: number;
+  createdAt: string;
+}
+
+export default function AdminFormationsPage() {
+  const [formations, setFormations] = useState<Formation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<Formation | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const loadData = useCallback(() => {
+    setLoading(true);
+    api.get<{ data: Formation[] }>('/admin/formations')
+      .then((res) => setFormations(res.data))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  function flash(type: 'success' | 'error', text: string) {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }
+
+  async function handleDelete(id: string, title: string) {
+    if (!confirm(`Supprimer "${title}" et tout son contenu ?`)) return;
+    try { await api.delete(`/admin/formations/${id}`); flash('success', 'Formation supprimee'); loadData(); }
+    catch (err: unknown) { flash('error', err instanceof Error ? err.message : 'Erreur'); }
+  }
+
+  async function handleDuplicate(id: string) {
+    try { await api.post(`/admin/formations/${id}/duplicate`); flash('success', 'Formation dupliquee'); loadData(); }
+    catch (err: unknown) { flash('error', err instanceof Error ? err.message : 'Erreur'); }
+  }
+
+  async function handleTogglePublish(f: Formation) {
+    try { await api.put(`/admin/formations/${f.id}`, { isPublished: !f.isPublished }); loadData(); }
+    catch (err: unknown) { flash('error', err instanceof Error ? err.message : 'Erreur'); }
+  }
+
+  if (loading && formations.length === 0) {
+    return <div className="flex items-center gap-3 text-gray-500 py-12"><div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />Chargement...</div>;
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Formations</h1>
+        <button onClick={() => { setEditing(null); setShowCreate(true); }} className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors font-medium">
+          + Nouvelle formation
+        </button>
+      </div>
+
+      {message && (
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          {message.text}
+        </div>
+      )}
+      {error && <div className="text-red-600 mb-4">{error}</div>}
+
+      {/* Slide-over for create/edit */}
+      {(showCreate || editing) && (
+        <SlideOver
+          initial={editing}
+          onSave={() => { setShowCreate(false); setEditing(null); loadData(); flash('success', editing ? 'Formation modifiee' : 'Formation creee'); }}
+          onClose={() => { setShowCreate(false); setEditing(null); }}
+          onError={(msg) => flash('error', msg)}
+        />
+      )}
+
+      {formations.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <p className="text-gray-400">Aucune formation. Creez-en une pour commencer.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Mode</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Modules</th>
+                <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publiee</th>
+                <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {formations.map((f) => (
+                <tr key={f.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{f.title}</p>
+                    {f.description && <p className="text-xs text-gray-400 truncate max-w-xs">{f.description}</p>}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${f.pathwayMode === 'linear' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                      {f.pathwayMode === 'linear' ? 'Lineaire' : 'Libre'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{f.modulesCount}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-center">
+                    <Toggle checked={f.isPublished} onChange={() => handleTogglePublish(f)} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <a href={`/admin/formations/${f.id}`} className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded transition-colors font-medium">Gerer les modules</a>
+                      <button onClick={() => setEditing(f)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Editer">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                        </svg>
+                      </button>
+                      <button onClick={() => handleDuplicate(f.id)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Dupliquer</button>
+                      <button onClick={() => handleDelete(f.id, f.title)} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors">Supprimer</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Toggle ──────────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button onClick={onChange} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${checked ? 'bg-green-500' : 'bg-gray-300'}`}>
+      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${checked ? 'translate-x-4.5 ml-[18px]' : 'translate-x-0.5 ml-[3px]'}`} />
+    </button>
+  );
+}
+
+// ─── Slide-over form ─────────────────────────────────────────────────────────
+
+function SlideOver({ initial, onSave, onClose, onError }: {
+  initial: Formation | null;
+  onSave: () => void;
+  onClose: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [pathwayMode, setPathwayMode] = useState(initial?.pathwayMode ?? 'free');
+  const [threshold, setThreshold] = useState(initial?.videoCompletionThreshold ?? 99);
+  const [isPublished, setIsPublished] = useState(initial?.isPublished ?? false);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) { onError('Le titre est requis'); return; }
+    setSaving(true);
+    try {
+      const body = { title, description: description || undefined, pathwayMode, videoCompletionThreshold: threshold, isPublished };
+      if (initial) {
+        await api.put(`/admin/formations/${initial.id}`, body);
+      } else {
+        await api.post('/admin/formations', body);
+      }
+      onSave();
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Erreur');
+    }
+    setSaving(false);
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+
+      {/* Panel */}
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-xl flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">{initial ? 'Modifier la formation' : 'Nouvelle formation'}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mode de parcours</label>
+            <select value={pathwayMode} onChange={(e) => setPathwayMode(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+              <option value="free">Libre (non lineaire)</option>
+              <option value="linear">Lineaire</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Seuil completion video (%)</label>
+            <input type="number" min={1} max={100} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <div className="flex items-center gap-3">
+            <Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} />
+            <span className="text-sm text-gray-700">{isPublished ? 'Publiee' : 'Brouillon'}</span>
+          </div>
+        </form>
+
+        {/* Footer */}
+        <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Annuler</button>
+          <button onClick={(e) => { e.preventDefault(); handleSubmit(e as any); }} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}

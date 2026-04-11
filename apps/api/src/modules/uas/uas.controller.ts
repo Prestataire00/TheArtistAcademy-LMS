@@ -62,6 +62,26 @@ export async function update(req: Request, res: Response) {
   res.json({ data: ua });
 }
 
+const reorderSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+});
+
+export async function reorder(req: Request, res: Response) {
+  const parsed = reorderSchema.safeParse(req.body);
+  if (!parsed.success) throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+
+  const uas = await service.reorderUAs(req.params.moduleId, parsed.data.orderedIds);
+  await logEvent({
+    category: 'admin',
+    action: 'ua_reorder',
+    userId: adminId(req),
+    entityType: 'module',
+    entityId: req.params.moduleId,
+    payload: { orderedIds: parsed.data.orderedIds },
+  });
+  res.json({ data: uas });
+}
+
 export async function remove(req: Request, res: Response) {
   await service.deleteUA(req.params.id);
   await logEvent({

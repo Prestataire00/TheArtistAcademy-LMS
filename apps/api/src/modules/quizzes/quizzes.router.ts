@@ -2,14 +2,16 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
 import { asyncHandler } from '../../shared/errors';
+import { verifyTrainerOwnership } from '../../shared/trainer.guard';
 import * as ctrl from './quizzes.controller';
 
-// ─── Admin — Gestion quiz ─────────────────────────────────────────────────────
+// ─── Admin/Formateur — Gestion quiz ──────────────────────────────────────────
 export const adminQuizzesRouter = Router();
-adminQuizzesRouter.use(authenticate, requireRole('admin'));
+adminQuizzesRouter.use(authenticate, requireRole('trainer'));
 
 // PUT /api/v1/admin/uas/:id/quiz — Créer ou remplacer le quiz d'une UA
-adminQuizzesRouter.put('/uas/:id/quiz', asyncHandler(ctrl.adminUpsertQuiz));
+// Accessible admin (sans restriction) + trainer (uniquement ses formations)
+adminQuizzesRouter.put('/uas/:id/quiz', verifyTrainerOwnership(), asyncHandler(ctrl.adminUpsertQuiz));
 
 // ─── Player — Quiz apprenant ──────────────────────────────────────────────────
 export const playerQuizRouter = Router();

@@ -34,6 +34,8 @@ app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+// Force UTF-8 sur toutes les reponses JSON
+app.use((_req, res, next) => { res.setHeader('Content-Type', 'application/json; charset=utf-8'); next(); });
 app.use(requestLogger);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -43,13 +45,13 @@ api.use('/auth', authRouter);
 api.use('/progress', progressRouter);
 api.use('/enrollments', enrollmentsRouter);
 
-// Admin — catalogue
+// Admin — catalogue (quiz/resources avant UAs car routes plus specifiques)
 api.use('/admin/formations', adminFormationsRouter);
 api.use('/admin', adminModulesRouter);
-api.use('/admin', adminUAsRouter);
-api.use('/admin', adminVideosRouter);
 api.use('/admin', adminQuizzesRouter);
 api.use('/admin', adminResourcesRouter);
+api.use('/admin', adminVideosRouter);
+api.use('/admin', adminUAsRouter);
 
 // Player — apprenant
 api.use('/player', playerFormationsRouter);

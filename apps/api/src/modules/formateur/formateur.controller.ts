@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import * as service from './formateur.service';
 
-export async function listSessions(_req: Request, res: Response) {
-  const sessions = await service.listSessions();
+export async function listSessions(req: Request, res: Response) {
+  const sessions = await service.listSessions(req.user!.userId);
   res.json({ data: sessions });
 }
 

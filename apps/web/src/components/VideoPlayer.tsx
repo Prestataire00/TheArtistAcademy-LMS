@@ -23,26 +23,39 @@ export function VideoPlayer({ uaId, completionThreshold = 99 }: VideoPlayerProps
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
 
-  // Sends progress to backend — never logs the URL
-  const sendProgress = useCallback(async () => {
+  // Builds the current progress payload from the video element
+  const getProgressPayload = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !video.duration || video.duration === Infinity) return;
+    if (!video || !video.duration || video.duration === Infinity) return null;
+    return {
+      positionSeconds: Math.floor(video.currentTime),
+      percentWatched: Math.round((video.currentTime / video.duration) * 100),
+    };
+  }, []);
 
-    const positionSeconds = Math.floor(video.currentTime);
-    const percentWatched = Math.round((video.currentTime / video.duration) * 100);
+  // Sends progress via fetch (for heartbeat, pause, ended)
+  const sendProgress = useCallback(async () => {
+    const payload = getProgressPayload();
+    if (!payload) return;
 
     try {
-      const res = await api.post<{ data: { status: string } }>(`/player/uas/${uaId}/progress`, {
-        positionSeconds,
-        percentWatched,
-      });
+      const res = await api.post<{ data: { status: string } }>(`/player/uas/${uaId}/progress`, payload);
       if (res.data.status === 'completed') {
         setCompleted(true);
       }
     } catch {
       // Silently fail — progress save is best-effort
     }
-  }, [uaId]);
+  }, [uaId, getProgressPayload]);
+
+  // Sends progress via sendBeacon (for beforeunload — fetch is unreliable on page close)
+  const sendProgressBeacon = useCallback(() => {
+    const payload = getProgressPayload();
+    if (!payload) return;
+    const url = `/api/v1/player/uas/${uaId}/progress`;
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    navigator.sendBeacon(url, blob);
+  }, [uaId, getProgressPayload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,14 +99,21 @@ export function VideoPlayer({ uaId, completionThreshold = 99 }: VideoPlayerProps
 
     init();
 
+    // Save progress on page close (tab close, browser close)
+    const handleBeforeUnload = () => sendProgressBeacon();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       cancelled = true;
-      // Clean up: revoke object URL if any, clear interval
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Save progress on component unmount (Next.js navigation)
+      sendProgressBeacon();
+      // Clean up interval + video source
       if (intervalRef.current) clearInterval(intervalRef.current);
       const video = videoRef.current;
       if (video) video.src = '';
     };
-  }, [uaId, sendProgress]);
+  }, [uaId, sendProgress, sendProgressBeacon]);
 
   // Setup heartbeat interval on play, clear on pause/end
   function handlePlay() {

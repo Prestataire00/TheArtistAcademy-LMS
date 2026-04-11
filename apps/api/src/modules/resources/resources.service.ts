@@ -78,7 +78,7 @@ export async function uploadResource(
 
 export async function deleteResource(uaId: string) {
   const resource = await prisma.resource.findUnique({ where: { uaId } });
-  if (!resource) throw new NotFoundError('Ressource');
+  if (!resource) return; // Deja supprimee — idempotent
 
   // Supprimer du Storage
   await supabase.storage.from(RESOURCES_BUCKET).remove([resource.fileUrl]);
@@ -148,6 +148,21 @@ export async function generateDownloadUrl(resourceId: string): Promise<{ signedU
   }
 
   return { signedUrl: data.signedUrl, resource };
+}
+
+export async function generatePreviewUrlByUaId(uaId: string): Promise<{ signedUrl: string; fileName: string }> {
+  const resource = await prisma.resource.findUnique({ where: { uaId } });
+  if (!resource) throw new NotFoundError('Ressource');
+
+  const { data, error } = await supabase.storage
+    .from(RESOURCES_BUCKET)
+    .createSignedUrl(resource.fileUrl, SIGNED_DOWNLOAD_TTL);
+
+  if (error || !data?.signedUrl) {
+    throw new BadRequestError('Impossible de generer le lien de previsualisation');
+  }
+
+  return { signedUrl: data.signedUrl, fileName: resource.fileName };
 }
 
 export async function markResourceCompleted(enrollmentId: string, uaId: string) {

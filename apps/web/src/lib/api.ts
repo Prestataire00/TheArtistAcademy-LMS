@@ -18,6 +18,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(data?.error?.message || `HTTP ${res.status}`);
   }
 
+  // 204 No Content — pas de body
+  if (res.status === 204) return {} as T;
+
   return res.json();
 }
 

@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
 import { asyncHandler, BadRequestError } from '../../shared/errors';
+import { verifyTrainerOwnership } from '../../shared/trainer.guard';
 import * as ctrl from './resources.controller';
 
 const ALLOWED_MIMES = [
@@ -13,33 +14,33 @@ const ALLOWED_MIMES = [
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIMES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Format non accepté. Formats autorisés : PDF, PPT, PPTX'));
+      cb(new Error('Format non accepte. Formats autorises : PDF, PPT, PPTX'));
     }
   },
 });
 
-/** Convertit les erreurs multer en BadRequestError pour le error handler Express. */
 function handleMulterError(err: Error, _req: Request, _res: Response, next: NextFunction) {
-  if (err instanceof multer.MulterError || err.message.includes('Format non accepté')) {
+  if (err instanceof multer.MulterError || err.message.includes('Format non accepte')) {
     return next(new BadRequestError(err.message));
   }
   next(err);
 }
 
-// ─── Admin — Upload/Delete ressource ──────────────────────────────────────────
+// ─── Admin/Formateur — Upload/Delete ressource ──────────────────────────────
 export const adminResourcesRouter = Router();
-adminResourcesRouter.use(authenticate, requireRole('admin'));
+adminResourcesRouter.use(authenticate, requireRole('trainer'));
 
 // POST   /api/v1/admin/uas/:id/resource
-adminResourcesRouter.post('/uas/:id/resource', upload.single('file'), handleMulterError, asyncHandler(ctrl.adminUpload));
+// Accessible admin (sans restriction) + trainer (uniquement ses formations)
+adminResourcesRouter.post('/uas/:id/resource', upload.single('file'), handleMulterError, verifyTrainerOwnership(), asyncHandler(ctrl.adminUpload));
 
 // DELETE /api/v1/admin/uas/:id/resource
-adminResourcesRouter.delete('/uas/:id/resource', asyncHandler(ctrl.adminDelete));
+adminResourcesRouter.delete('/uas/:id/resource', verifyTrainerOwnership(), asyncHandler(ctrl.adminDelete));
 
 // ─── Player — Liste + Téléchargement ─────────────────────────────────────────
 export const playerResourcesRouter = Router();

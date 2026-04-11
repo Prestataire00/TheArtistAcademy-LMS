@@ -56,6 +56,18 @@ export async function updateUA(
   return toDto(ua);
 }
 
+export async function reorderUAs(moduleId: string, orderedIds: string[]) {
+  const existing = await prisma.uA.findMany({ where: { moduleId }, select: { id: true } });
+  const existingIds = new Set(existing.map((u) => u.id));
+  for (const id of orderedIds) {
+    if (!existingIds.has(id)) throw new NotFoundError(`UA ${id}`);
+  }
+  await prisma.$transaction(
+    orderedIds.map((id, index) => prisma.uA.update({ where: { id }, data: { position: index } })),
+  );
+  return listUAs(moduleId);
+}
+
 export async function deleteUA(id: string) {
   const exists = await prisma.uA.findUnique({ where: { id } });
   if (!exists) throw new NotFoundError('UA');

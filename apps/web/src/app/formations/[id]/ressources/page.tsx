@@ -74,8 +74,13 @@ export default function RessourcesPage() {
   async function handleDownload(resource: Resource) {
     setDownloading(resource.id);
     try {
-      const res = await api.get<{ data: { signedUrl: string } }>(`/player/resources/${resource.id}/download`);
-      window.open(res.data.signedUrl, '_blank');
+      const res = await api.get<{ data: { signedUrl: string; fileName: string } }>(`/player/resources/${resource.id}/download`);
+      const a = document.createElement('a');
+      a.href = res.data.signedUrl;
+      a.download = res.data.fileName || resource.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erreur de telechargement');
     } finally {
@@ -207,19 +212,19 @@ function ResourceRow({
         </p>
       </div>
       <button
-        onClick={() => onDownload(resource)}
-        disabled={isDownloading}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
-      >
-        {isDownloading ? (
-          <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-        )}
-        <span className="hidden sm:inline">Telecharger</span>
-      </button>
+          onClick={() => onDownload(resource)}
+          disabled={isDownloading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {isDownloading ? (
+            <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+          )}
+          <span className="hidden sm:inline">Telecharger</span>
+        </button>
     </div>
   );
 }

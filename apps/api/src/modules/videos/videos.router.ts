@@ -20,7 +20,7 @@ const upload = multer({
 
 // ─── Admin — Upload vidéo ─────────────────────────────────────────────────────
 export const adminVideosRouter = Router();
-adminVideosRouter.use(authenticate, requireRole('admin'));
+adminVideosRouter.use(authenticate, requireRole('trainer'));
 
 // POST /api/v1/admin/uas/:id/video
 adminVideosRouter.post('/uas/:id/video', upload.single('file'), asyncHandler(ctrl.adminUpload));

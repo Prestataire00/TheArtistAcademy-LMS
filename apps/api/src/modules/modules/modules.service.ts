@@ -13,7 +13,15 @@ export async function listModules(formationId: string) {
 export async function getModule(id: string) {
   const mod = await prisma.module.findUnique({
     where: { id },
-    include: { uas: { orderBy: { position: 'asc' } } },
+    include: {
+      uas: {
+        orderBy: { position: 'asc' },
+        include: {
+          resource: { select: { id: true, fileName: true, fileType: true, fileSizeBytes: true } },
+          videoContent: { select: { id: true, originalName: true, durationSeconds: true } },
+        },
+      },
+    },
   });
   if (!mod) throw new NotFoundError('Module');
   return toDto(mod);
@@ -197,6 +205,8 @@ function toDto(mod: any) {
       isPublished: ua.isPublished,
       createdAt: ua.createdAt.toISOString(),
       updatedAt: ua.updatedAt.toISOString(),
+      resource: ua.resource ? { id: ua.resource.id, fileName: ua.resource.fileName, fileType: ua.resource.fileType, fileSizeBytes: ua.resource.fileSizeBytes } : null,
+      videoContent: ua.videoContent ? { id: ua.videoContent.id, originalName: ua.videoContent.originalName, durationSeconds: ua.videoContent.durationSeconds } : null,
     })),
   };
 }
