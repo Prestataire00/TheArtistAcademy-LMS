@@ -160,6 +160,19 @@ export default function FormationPage() {
       {/* ─── Header ──────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-6 py-8">
+          {/* Top bar avec lien Dendreo */}
+          <div className="flex items-center justify-end mb-4">
+            <a
+              href={process.env.NEXT_PUBLIC_DENDREO_EXTRANET_URL || '#'}
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-brand-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+              Mes formations
+            </a>
+          </div>
+
           {/* Bandeau formation terminee */}
           {isCompleted && (
             <div className="mb-6 flex items-center gap-3 bg-green-50 text-green-800 rounded-lg px-4 py-3 border border-green-200">

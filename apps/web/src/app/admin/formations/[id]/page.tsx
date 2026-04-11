@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { SlideOver } from '@/components/SlideOver';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -117,13 +118,13 @@ export default function AdminFormationDetailPage() {
         </div>
       )}
 
-      {/* Module form */}
+      {/* Module slide-over */}
       {showModuleForm && (
-        <ModuleForm
+        <ModuleSlideOver
           formationId={formationId}
           initial={editingModule}
-          onSave={() => { setShowModuleForm(false); loadData(); flash('success', editingModule ? 'Module modifie' : 'Module cree'); }}
-          onCancel={() => setShowModuleForm(false)}
+          onSave={() => { setShowModuleForm(false); setEditingModule(null); loadData(); flash('success', editingModule ? 'Module modifie' : 'Module cree'); }}
+          onClose={() => { setShowModuleForm(false); setEditingModule(null); }}
           onError={(msg) => flash('error', msg)}
         />
       )}
@@ -154,6 +155,7 @@ export default function AdminFormationDetailPage() {
                       onDuplicate={() => handleDuplicateModule(mod.id)}
                       onDelete={() => handleDeleteModule(mod.id, mod.title)}
                       onTogglePublish={async () => { try { await api.put(`/admin/modules/${mod.id}`, { isPublished: !mod.isPublished }); loadData(); } catch {} }}
+                      onUpdate={loadData}
                     />
                   ))}
                 </tbody>
@@ -168,12 +170,21 @@ export default function AdminFormationDetailPage() {
 
 // ─── Sortable module row ─────────────────────────────────────────────────────
 
-function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, onTogglePublish }: {
+function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, onTogglePublish, onUpdate }: {
   mod: Module; formationId: string;
-  onEdit: () => void; onDuplicate: () => void; onDelete: () => void; onTogglePublish: () => void;
+  onEdit: () => void; onDuplicate: () => void; onDelete: () => void; onTogglePublish: () => void; onUpdate: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: mod.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(mod.title);
+
+  async function saveTitle() {
+    if (!editTitle.trim() || editTitle.trim() === mod.title) { setEditing(false); setEditTitle(mod.title); return; }
+    try { await api.put(`/admin/modules/${mod.id}`, { title: editTitle.trim() }); setEditing(false); onUpdate(); }
+    catch { setEditing(false); setEditTitle(mod.title); }
+  }
 
   return (
     <tr ref={setNodeRef} style={style} className="hover:bg-gray-50">
@@ -183,7 +194,14 @@ function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, on
         </button>
       </td>
       <td className="px-4 py-3">
-        <p className="font-medium text-gray-900">{mod.title}</p>
+        {editing ? (
+          <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditing(false); setEditTitle(mod.title); } }}
+            onBlur={saveTitle} autoFocus
+            className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full" />
+        ) : (
+          <p onClick={() => { setEditTitle(mod.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300">{mod.title}</p>
+        )}
       </td>
       <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{mod.uas.length}</td>
       <td className="px-4 py-3 hidden md:table-cell text-center">
@@ -192,7 +210,7 @@ function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, on
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-1">
           <a href={`/admin/formations/${formationId}/modules/${mod.id}`} className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded font-medium">Gerer les UAs</a>
-          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Editer">
+          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Modifier la description">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
             </svg>
@@ -215,56 +233,35 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   );
 }
 
-// ─── Module form ─────────────────────────────────────────────────────────────
+// ─── Module slide-over form ──────────────────────────────────────────────────
 
-function ModuleForm({ formationId, initial, onSave, onCancel, onError }: {
-  formationId: string;
-  initial: Module | null;
-  onSave: () => void;
-  onCancel: () => void;
-  onError: (msg: string) => void;
+function ModuleSlideOver({ formationId, initial, onSave, onClose, onError }: {
+  formationId: string; initial: Module | null; onSave: () => void; onClose: () => void; onError: (msg: string) => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [isPublished, setIsPublished] = useState(initial?.isPublished ?? true);
   const [saving, setSaving] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     if (!title.trim()) { onError('Le titre est requis'); return; }
     setSaving(true);
     try {
-      if (initial) {
-        await api.put(`/admin/modules/${initial.id}`, { title, description: description || undefined, isPublished });
-      } else {
-        await api.post('/admin/modules', { formationId, title, description: description || undefined, isPublished });
-      }
+      if (initial) { await api.put(`/admin/modules/${initial.id}`, { title, description: description || undefined, isPublished }); }
+      else { await api.post('/admin/modules', { formationId, title, description: description || undefined, isPublished }); }
       onSave();
     } catch (err: unknown) { onError(err instanceof Error ? err.message : 'Erreur'); }
     setSaving(false);
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-      <h3 className="font-semibold text-gray-900 mb-4">{initial ? 'Modifier le module' : 'Nouveau module'}</h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" />
-        </div>
-        <div className="flex items-center gap-2">
-          <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} id="mod-pub" className="w-4 h-4" />
-          <label htmlFor="mod-pub" className="text-sm text-gray-700">Publie</label>
-        </div>
-        <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
-          <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button>
-        </div>
-      </form>
-    </div>
+    <SlideOver title={initial ? 'Modifier le module' : 'Nouveau module'} onClose={onClose}
+      footer={<div className="flex gap-3"><button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button><button onClick={handleSubmit} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button></div>}>
+      <div className="space-y-5">
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" /></div>
+        <div className="flex items-center gap-3"><Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} /><span className="text-sm text-gray-700">{isPublished ? 'Publie' : 'Brouillon'}</span></div>
+      </div>
+    </SlideOver>
   );
 }

@@ -125,7 +125,109 @@ async function main() {
     },
   });
 
-  console.log('Seed terminé :');
+  // ─── 9. Apprenants supplementaires (alice + bob) ────────────────────────────
+
+  // Formation Test Dispo (existante ou celle qu'on vient de creer)
+  const formationDispo = await prisma.formation.findFirst({ where: { title: { contains: 'Formation Test Dispo' } } });
+  const formationArtNum = await prisma.formation.findFirst({ where: { title: { contains: 'Art Numerique' } } });
+  const targetFormationId = formationDispo?.id ?? formation.id;
+
+  // Recuperer les UAs du module 1 de la formation cible
+  const targetModule = await prisma.module.findFirst({
+    where: { formationId: targetFormationId },
+    orderBy: { position: 'asc' },
+    include: { uas: { where: { isPublished: true }, orderBy: { position: 'asc' } } },
+  });
+  const targetUAs = targetModule?.uas ?? [];
+
+  // Alice
+  const alice = await prisma.user.upsert({
+    where: { email: 'alice@test.fr' },
+    update: { lastSeenAt: now },
+    create: { email: 'alice@test.fr', fullName: 'Alice Martin', role: 'learner', lastSeenAt: now },
+  });
+
+  const aliceEnroll1 = await prisma.enrollment.create({
+    data: {
+      userId: alice.id, formationId: targetFormationId,
+      dendreoEnrolmentId: `seed_alice1_${Date.now()}`,
+      startDate: new Date(now.getTime() - 86400000), endDate: in30Days, status: 'active',
+    },
+  });
+
+  // Alice sur Art Numerique aussi
+  let aliceEnroll2 = null;
+  if (formationArtNum) {
+    aliceEnroll2 = await prisma.enrollment.create({
+      data: {
+        userId: alice.id, formationId: formationArtNum.id,
+        dendreoEnrolmentId: `seed_alice2_${Date.now()}`,
+        startDate: new Date(now.getTime() - 86400000), endDate: in30Days, status: 'active',
+      },
+    });
+  }
+
+  // Bob
+  const bob = await prisma.user.upsert({
+    where: { email: 'bob@test.fr' },
+    update: { lastSeenAt: now },
+    create: { email: 'bob@test.fr', fullName: 'Bob Dupont', role: 'learner', lastSeenAt: now },
+  });
+
+  const bobEnroll = await prisma.enrollment.create({
+    data: {
+      userId: bob.id, formationId: targetFormationId,
+      dendreoEnrolmentId: `seed_bob_${Date.now()}`,
+      startDate: new Date(now.getTime() - 86400000), endDate: in30Days, status: 'active',
+    },
+  });
+
+  // ─── 10. Simuler progression ───────────────────────────────────────────────
+
+  // Alice : 80% du module 1 (complete les 4 premieres UAs sur 5, ou toutes sauf la derniere)
+  const aliceCompleteCount = Math.ceil(targetUAs.length * 0.8);
+  for (let i = 0; i < targetUAs.length; i++) {
+    const uaItem = targetUAs[i];
+    const isCompleted = i < aliceCompleteCount;
+    await prisma.uAProgress.upsert({
+      where: { enrollmentId_uaId: { enrollmentId: aliceEnroll1.id, uaId: uaItem.id } },
+      update: {},
+      create: {
+        enrollmentId: aliceEnroll1.id,
+        uaId: uaItem.id,
+        status: isCompleted ? 'completed' : 'in_progress',
+        videoPositionSeconds: isCompleted ? 120 : 30,
+        videoPercentWatched: isCompleted ? 100 : 25,
+        timeSpentSeconds: isCompleted ? 300 : 60,
+        firstAccessedAt: new Date(now.getTime() - 3600000),
+        completedAt: isCompleted ? new Date(now.getTime() - 1800000) : null,
+      },
+    });
+  }
+
+  // Bob : 20% du module 1 (complete seulement la 1ere UA)
+  const bobCompleteCount = Math.max(1, Math.ceil(targetUAs.length * 0.2));
+  for (let i = 0; i < targetUAs.length; i++) {
+    const uaItem = targetUAs[i];
+    if (i < bobCompleteCount) {
+      await prisma.uAProgress.upsert({
+        where: { enrollmentId_uaId: { enrollmentId: bobEnroll.id, uaId: uaItem.id } },
+        update: {},
+        create: {
+          enrollmentId: bobEnroll.id,
+          uaId: uaItem.id,
+          status: 'completed',
+          videoPositionSeconds: 120,
+          videoPercentWatched: 100,
+          timeSpentSeconds: 180,
+          firstAccessedAt: new Date(now.getTime() - 7200000),
+          completedAt: new Date(now.getTime() - 7000000),
+        },
+      });
+    }
+  }
+
+  console.log('Seed termine :');
   console.log(`  Formation  : ${formation.id}`);
   console.log(`  Module     : ${module.id}`);
   console.log(`  UA video   : ${ua.id}`);
@@ -134,6 +236,12 @@ async function main() {
   console.log(`  Resource   : ${resource.id}`);
   console.log(`  User       : ${user.id} (${user.email})`);
   console.log(`  Enrollment : ${enrollment.id}`);
+  console.log();
+  console.log(`  Alice      : ${alice.id} (${alice.email})`);
+  console.log(`    Enroll 1 : ${aliceEnroll1.id} -> ${targetFormationId} (${aliceCompleteCount}/${targetUAs.length} UAs completed = ~80%)`);
+  if (aliceEnroll2) console.log(`    Enroll 2 : ${aliceEnroll2.id} -> ${formationArtNum!.id} (Art Numerique)`);
+  console.log(`  Bob        : ${bob.id} (${bob.email})`);
+  console.log(`    Enroll   : ${bobEnroll.id} -> ${targetFormationId} (${bobCompleteCount}/${targetUAs.length} UAs completed = ~20%)`);
 }
 
 main()

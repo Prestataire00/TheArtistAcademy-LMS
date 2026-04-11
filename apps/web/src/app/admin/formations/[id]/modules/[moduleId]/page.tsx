@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { SlideOver } from '@/components/SlideOver';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -304,16 +305,13 @@ function SortableUARow(props: {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ua.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
-  const [renaming, setRenaming] = useState(false);
-  const [newTitle, setNewTitle] = useState(ua.title);
-  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(ua.title);
 
-  async function handleRename() {
-    if (!newTitle.trim()) return;
-    setSaving(true);
-    try { await api.put(`/admin/uas/${ua.id}`, { title: newTitle.trim() }); setRenaming(false); onUpdate(); }
+  async function saveTitle() {
+    if (!editTitle.trim() || editTitle.trim() === ua.title) { setEditing(false); setEditTitle(ua.title); return; }
+    try { await api.put(`/admin/uas/${ua.id}`, { title: editTitle.trim() }); setEditing(false); onUpdate(); }
     catch (err: unknown) { onFlash('error', err instanceof Error ? err.message : 'Erreur'); }
-    setSaving(false);
   }
 
   async function handleTogglePublish() {
@@ -326,88 +324,59 @@ function SortableUARow(props: {
 
   return (
     <tr ref={setNodeRef} style={style} className="hover:bg-gray-50">
-      {/* Drag handle */}
       <td className="w-10 px-2 py-3 text-center">
         <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none" title="Glisser pour reordonner">
           <span className="text-lg leading-none">&#10303;</span>
         </button>
       </td>
-
-      {/* Title */}
       <td className="px-4 py-3">
-        {renaming ? (
-          <div className="flex items-center gap-2">
-            <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setRenaming(false); setNewTitle(ua.title); } }}
-              autoFocus className="px-2 py-1 border border-brand-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-48" />
-            <button onClick={handleRename} disabled={saving} className="px-2 py-1 text-xs bg-brand-600 text-white rounded disabled:opacity-50">OK</button>
-            <button onClick={() => { setRenaming(false); setNewTitle(ua.title); }} className="px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded">Annuler</button>
-          </div>
+        {editing ? (
+          <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditing(false); setEditTitle(ua.title); } }}
+            onBlur={saveTitle} autoFocus
+            className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full" />
         ) : (
-          <p className="font-medium text-gray-900">{ua.title}</p>
+          <p onClick={() => { setEditTitle(ua.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300">{ua.title}</p>
         )}
       </td>
-
-      {/* Type */}
       <td className="px-4 py-3 hidden sm:table-cell">
-        <span className={`text-xs px-2 py-0.5 rounded-full ${
-          ua.type === 'video' ? 'bg-purple-50 text-purple-600' :
-          ua.type === 'quiz' ? 'bg-blue-50 text-blue-600' :
-          'bg-red-50 text-red-600'
-        }`}>{typeLabels[ua.type] || ua.type}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full ${ua.type === 'video' ? 'bg-purple-50 text-purple-600' : ua.type === 'quiz' ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>{typeLabels[ua.type] || ua.type}</span>
       </td>
-
-      {/* Fichier */}
       <td className="px-4 py-3 text-gray-500 text-xs truncate max-w-[150px] hidden md:table-cell">{fileName}</td>
-
-      {/* Toggle publie */}
-      <td className="px-4 py-3 hidden md:table-cell text-center">
-        <Toggle checked={ua.isPublished} onChange={handleTogglePublish} />
-      </td>
-
-      {/* Actions */}
+      <td className="px-4 py-3 hidden md:table-cell text-center"><Toggle checked={ua.isPublished} onChange={handleTogglePublish} /></td>
       <td className="px-4 py-3 text-right">
-        {!renaming && (
-          <div className="flex items-center justify-end gap-1">
-            {ua.type === 'quiz' && (
-              <button onClick={onOpenQuiz} className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded">Editer quiz</button>
-            )}
-            {ua.type === 'resource' && (
-              <>
-                {ua.resource && (
-                  <>
-                    <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/resources/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
-                    <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string;fileName:string}}>(`/admin/resources/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=r.data.fileName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Telecharger</button>
-                  </>
-                )}
-                <label className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded cursor-pointer">
-                  {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" /> : (ua.resource ? 'Remplacer' : 'Uploader')}
-                  <input type="file" accept=".pdf,.ppt,.pptx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('resource', f); e.target.value = ''; }} />
-                </label>
-              </>
-            )}
-            {ua.type === 'video' && (
-              <>
-                {ua.videoContent && (
-                  <>
-                    <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
-                    <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=ua.videoContent!.originalName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Telecharger</button>
-                  </>
-                )}
-                <label className="px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded cursor-pointer">
-                  {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" /> : (ua.videoContent ? 'Remplacer' : 'Uploader')}
-                  <input type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('video', f); e.target.value = ''; }} />
-                </label>
-              </>
-            )}
-            <button onClick={() => { setNewTitle(ua.title); setRenaming(true); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Renommer">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-              </svg>
-            </button>
-            <button onClick={onDelete} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded">Supprimer</button>
-          </div>
-        )}
+        <div className="flex items-center justify-end gap-1">
+          {ua.type === 'quiz' && <button onClick={onOpenQuiz} className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded">Editer quiz</button>}
+          {ua.type === 'resource' && (
+            <>
+              {ua.resource && (
+                <>
+                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/resources/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
+                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string;fileName:string}}>(`/admin/resources/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=r.data.fileName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Telecharger</button>
+                </>
+              )}
+              <label className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded cursor-pointer">
+                {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" /> : (ua.resource ? 'Remplacer' : 'Uploader')}
+                <input type="file" accept=".pdf,.ppt,.pptx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('resource', f); e.target.value = ''; }} />
+              </label>
+            </>
+          )}
+          {ua.type === 'video' && (
+            <>
+              {ua.videoContent && (
+                <>
+                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
+                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=ua.videoContent!.originalName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Telecharger</button>
+                </>
+              )}
+              <label className="px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded cursor-pointer">
+                {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" /> : (ua.videoContent ? 'Remplacer' : 'Uploader')}
+                <input type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('video', f); e.target.value = ''; }} />
+              </label>
+            </>
+          )}
+          <button onClick={onDelete} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded">Supprimer</button>
+        </div>
       </td>
     </tr>
   );

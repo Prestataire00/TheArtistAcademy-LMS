@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { SlideOver } from '@/components/SlideOver';
 
 interface Formation {
   id: string;
@@ -75,7 +76,7 @@ export default function AdminFormationsPage() {
 
       {/* Slide-over for create/edit */}
       {(showCreate || editing) && (
-        <SlideOver
+        <FormationSlideOver
           initial={editing}
           onSave={() => { setShowCreate(false); setEditing(null); loadData(); flash('success', editing ? 'Formation modifiee' : 'Formation creee'); }}
           onClose={() => { setShowCreate(false); setEditing(null); }}
@@ -147,13 +148,10 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   );
 }
 
-// ─── Slide-over form ─────────────────────────────────────────────────────────
+// ─── Formation slide-over form ───────────────────────────────────────────────
 
-function SlideOver({ initial, onSave, onClose, onError }: {
-  initial: Formation | null;
-  onSave: () => void;
-  onClose: () => void;
-  onError: (msg: string) => void;
+function FormationSlideOver({ initial, onSave, onClose, onError }: {
+  initial: Formation | null; onSave: () => void; onClose: () => void; onError: (msg: string) => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -162,76 +160,28 @@ function SlideOver({ initial, onSave, onClose, onError }: {
   const [isPublished, setIsPublished] = useState(initial?.isPublished ?? false);
   const [saving, setSaving] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     if (!title.trim()) { onError('Le titre est requis'); return; }
     setSaving(true);
     try {
       const body = { title, description: description || undefined, pathwayMode, videoCompletionThreshold: threshold, isPublished };
-      if (initial) {
-        await api.put(`/admin/formations/${initial.id}`, body);
-      } else {
-        await api.post('/admin/formations', body);
-      }
+      if (initial) { await api.put(`/admin/formations/${initial.id}`, body); }
+      else { await api.post('/admin/formations', body); }
       onSave();
-    } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Erreur');
-    }
+    } catch (err: unknown) { onError(err instanceof Error ? err.message : 'Erreur'); }
     setSaving(false);
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-
-      {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-xl flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">{initial ? 'Modifier la formation' : 'Nouvelle formation'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mode de parcours</label>
-            <select value={pathwayMode} onChange={(e) => setPathwayMode(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-              <option value="free">Libre (non lineaire)</option>
-              <option value="linear">Lineaire</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Seuil completion video (%)</label>
-            <input type="number" min={1} max={100} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-          </div>
-          <div className="flex items-center gap-3">
-            <Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} />
-            <span className="text-sm text-gray-700">{isPublished ? 'Publiee' : 'Brouillon'}</span>
-          </div>
-        </form>
-
-        {/* Footer */}
-        <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
-          <button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Annuler</button>
-          <button onClick={(e) => { e.preventDefault(); handleSubmit(e as any); }} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
-            {saving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        </div>
+    <SlideOver title={initial ? 'Modifier la formation' : 'Nouvelle formation'} onClose={onClose}
+      footer={<div className="flex gap-3"><button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button><button onClick={handleSubmit} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button></div>}>
+      <div className="space-y-5">
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Mode de parcours</label><select value={pathwayMode} onChange={(e) => setPathwayMode(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"><option value="free">Libre (non lineaire)</option><option value="linear">Lineaire</option></select></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Seuil completion video (%)</label><input type="number" min={1} max={100} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
+        <div className="flex items-center gap-3"><Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} /><span className="text-sm text-gray-700">{isPublished ? 'Publiee' : 'Brouillon'}</span></div>
       </div>
-    </>
+    </SlideOver>
   );
 }

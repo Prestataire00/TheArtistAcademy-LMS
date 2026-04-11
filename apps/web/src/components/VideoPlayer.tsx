@@ -23,13 +23,15 @@ export function VideoPlayer({ uaId, completionThreshold = 99 }: VideoPlayerProps
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
 
+  const completionSentRef = useRef(false);
+
   // Builds the current progress payload from the video element
   const getProgressPayload = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.duration || video.duration === Infinity) return null;
     return {
       positionSeconds: Math.floor(video.currentTime),
-      percentWatched: Math.round((video.currentTime / video.duration) * 100),
+      percentWatched: Math.floor((video.currentTime / video.duration) * 100),
     };
   }, []);
 
@@ -87,6 +89,20 @@ export function VideoPlayer({ uaId, completionThreshold = 99 }: VideoPlayerProps
             video.currentTime = savedPosition;
           }
         }, { once: true });
+
+        // Real-time completion check on timeupdate (~4x/sec)
+        // Sends progress immediately when threshold is crossed, not waiting for heartbeat
+        video.addEventListener('timeupdate', () => {
+          if (completionSentRef.current || !video.duration) return;
+          const pct = Math.floor((video.currentTime / video.duration) * 100);
+          if (pct >= completionThreshold) {
+            completionSentRef.current = true;
+            const payload = { positionSeconds: Math.floor(video.currentTime), percentWatched: pct };
+            api.post<{ data: { status: string } }>(`/player/uas/${uaId}/progress`, payload)
+              .then((res) => { if (res.data.status === 'completed') setCompleted(true); })
+              .catch(() => { completionSentRef.current = false; }); // Retry on next timeupdate
+          }
+        });
 
         setLoading(false);
       } catch (err: unknown) {

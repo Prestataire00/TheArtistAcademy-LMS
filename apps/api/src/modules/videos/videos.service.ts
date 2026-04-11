@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database';
 import { supabase, STORAGE_BUCKET, SIGNED_URL_EXPIRES_IN } from '../../config/supabase';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
+import { logger } from '../../shared/logger';
 
 /**
  * Upload une vidéo vers Supabase Storage et crée/met à jour le VideoContent.
@@ -103,14 +104,29 @@ export async function saveVideoProgress(
   const now = new Date();
   const isCompleted = percentWatched >= completionThreshold;
 
+  // Debug log (temporaire)
+  logger.debug('Video progress', {
+    uaId,
+    positionSeconds,
+    percentWatched,
+    completionThreshold,
+    isCompleted,
+  });
+
+  // Ne pas regresser un statut deja completed
+  const existing = await prisma.uAProgress.findUnique({
+    where: { enrollmentId_uaId: { enrollmentId, uaId } },
+  });
+  const alreadyCompleted = existing?.status === 'completed';
+
   const progress = await prisma.uAProgress.upsert({
     where: { enrollmentId_uaId: { enrollmentId, uaId } },
     update: {
       videoPositionSeconds: positionSeconds,
       videoPercentWatched: percentWatched,
-      status: isCompleted ? 'completed' : 'in_progress',
-      completedAt: isCompleted ? now : undefined,
-      timeSpentSeconds: { increment: 15 }, // ~heartbeat interval
+      status: alreadyCompleted ? 'completed' : (isCompleted ? 'completed' : 'in_progress'),
+      completedAt: (alreadyCompleted || isCompleted) ? (existing?.completedAt ?? now) : undefined,
+      timeSpentSeconds: { increment: 10 }, // heartbeat interval = 10s
     },
     create: {
       enrollmentId,
@@ -120,7 +136,7 @@ export async function saveVideoProgress(
       status: isCompleted ? 'completed' : 'in_progress',
       firstAccessedAt: now,
       completedAt: isCompleted ? now : null,
-      timeSpentSeconds: 15,
+      timeSpentSeconds: 10,
     },
   });
 
