@@ -44,6 +44,7 @@ adminUsersRouter.post('/', asyncHandler(async (req: Request, res: Response) => {
 // PUT /api/v1/admin/utilisateurs/:id
 const updateSchema = z.object({
   role: z.enum(['admin', 'trainer']).optional(),
+  fullName: z.string().min(1).max(255).optional(),
   resetPassword: z.boolean().optional(),
 });
 

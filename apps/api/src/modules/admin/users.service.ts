@@ -17,7 +17,7 @@ export async function listStaffUsers() {
       createdAt: true,
       lastSeenAt: true,
     },
-    orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
+    orderBy: { createdAt: 'desc' },
   });
 }
 
@@ -53,7 +53,7 @@ export async function createStaffUser(data: {
 
 export async function updateStaffUser(
   id: string,
-  data: { role?: 'admin' | 'trainer'; resetPassword?: boolean },
+  data: { role?: 'admin' | 'trainer'; fullName?: string; resetPassword?: boolean },
 ) {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new NotFoundError('Utilisateur');
@@ -66,6 +66,10 @@ export async function updateStaffUser(
 
   if (data.role) {
     updateData.role = data.role;
+  }
+
+  if (data.fullName) {
+    updateData.fullName = data.fullName;
   }
 
   if (data.resetPassword) {

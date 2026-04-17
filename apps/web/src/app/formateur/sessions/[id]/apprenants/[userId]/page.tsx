@@ -222,10 +222,10 @@ export default function ApprenantDetailPage() {
               </table>
             </div>
 
-            {/* Reponses courtes */}
+            {/* Réponses courtes */}
             {data.quizHistory.some((q) => q.shortAnswers.length > 0) && (
               <div className="mt-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Reponses courtes (declaratives)</h3>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Réponses courtes (déclaratives)</h3>
                 <div className="space-y-3">
                   {data.quizHistory
                     .filter((q) => q.shortAnswers.length > 0)

@@ -11,6 +11,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -127,15 +130,51 @@ export default function LoginPage() {
             onClick={() => setShowForgot(true)}
             className="w-full text-center text-xs text-gray-500 hover:text-brand-600 transition-colors"
           >
-            Mot de passe oublie ?
+            Mot de passe oublié ?
           </button>
         </form>
 
         {showForgot && (
-          <div className="mt-4 bg-white rounded-xl border border-gray-200 p-5 text-sm text-gray-600">
-            <p className="font-medium text-gray-900 mb-2">Reinitialisation du mot de passe</p>
-            <p>Contactez votre administrateur pour obtenir un nouveau mot de passe temporaire.</p>
-            <button onClick={() => setShowForgot(false)} className="mt-3 text-xs text-brand-600 hover:text-brand-700 font-medium">Fermer</button>
+          <div className="mt-4 bg-white rounded-xl border border-gray-200 p-5">
+            <p className="font-medium text-gray-900 mb-3 text-sm">Réinitialisation du mot de passe</p>
+            {forgotSent ? (
+              <div>
+                <p className="text-sm text-gray-600 mb-3">Si cette adresse est connue, un email contenant un lien de reinitialisation a ete envoye.</p>
+                <button onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(''); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Retour à la connexion</button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="votre@email.fr"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setShowForgot(false); setForgotEmail(''); }}
+                    className="flex-1 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  >Annuler</button>
+                  <button
+                    disabled={forgotLoading || !forgotEmail}
+                    onClick={async () => {
+                      setForgotLoading(true);
+                      try {
+                        await fetch('/api/v1/auth/forgot-password', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: forgotEmail }),
+                        });
+                      } catch {}
+                      setForgotLoading(false);
+                      setForgotSent(true);
+                    }}
+                    className="flex-1 px-3 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+                  >{forgotLoading ? 'Envoi...' : 'Envoyer'}</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

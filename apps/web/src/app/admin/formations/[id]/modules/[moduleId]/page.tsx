@@ -7,6 +7,7 @@ import { SlideOver } from '@/components/SlideOver';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useToast } from '@/components/admin/ToastContext';
 
 interface ResourceInfo { id: string; fileName: string; fileType: string; fileSizeBytes: number | null }
 interface VideoInfo { id: string; originalName: string; durationSeconds: number | null }
@@ -23,9 +24,9 @@ export default function AdminModuleDetailPage() {
   const [mod, setMod] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showUAForm, setShowUAForm] = useState(false);
   const [editingUA, setEditingUA] = useState<UA | null>(null);
+  const { showToast } = useToast();
 
   // Quiz editor state
   const [quizUaId, setQuizUaId] = useState<string | null>(null);
@@ -45,15 +46,10 @@ export default function AdminModuleDetailPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  function flash(type: 'success' | 'error', text: string) {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
-  }
-
   async function handleDeleteUA(id: string, title: string) {
     if (!confirm(`Supprimer "${title}" ?`)) return;
-    try { await api.delete(`/admin/uas/${id}`); flash('success', 'UA supprimee'); loadData(); }
-    catch (err: unknown) { flash('error', err instanceof Error ? err.message : 'Erreur'); }
+    try { await api.delete(`/admin/uas/${id}`); showToast('UA supprimée', 'success'); loadData(); }
+    catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Erreur', 'error'); }
   }
 
   // ─── Drag & drop ──────────────────────────────────────────────────────
@@ -77,7 +73,7 @@ export default function AdminModuleDetailPage() {
       });
       loadData();
     } catch (err: unknown) {
-      flash('error', err instanceof Error ? err.message : 'Erreur reordonnancement');
+      showToast(err instanceof Error ? err.message : 'Erreur réordonnancement', 'error');
       loadData(); // Revert
     }
   }
@@ -111,13 +107,13 @@ export default function AdminModuleDetailPage() {
       if (!q.text.trim()) { setQuizError(`Q${i + 1} : texte vide`); return; }
       if (q.type !== 'short') {
         if (q.choices.some((c) => !c.text.trim())) { setQuizError(`Q${i + 1} : un choix est vide`); return; }
-        if (!q.choices.some((c) => c.isCorrect)) { setQuizError(`Q${i + 1} : selectionnez la bonne reponse`); return; }
+        if (!q.choices.some((c) => c.isCorrect)) { setQuizError(`Q${i + 1} : sélectionnez la bonne réponse`); return; }
       }
     }
     try {
       await api.put(`/admin/uas/${quizUaId}/quiz`, { questions: quizData.questions });
       setQuizUaId(null); setQuizData(null);
-      flash('success', 'Quiz sauvegarde');
+      showToast('Quiz sauvegardé', 'success');
       loadData();
     } catch (err: unknown) { setQuizError(err instanceof Error ? err.message : 'Erreur'); }
   }
@@ -132,9 +128,9 @@ export default function AdminModuleDetailPage() {
       const endpoint = type === 'video' ? `/api/v1/admin/uas/${uaId}/video` : `/api/v1/admin/uas/${uaId}/resource`;
       const res = await fetch(endpoint, { method: 'POST', credentials: 'include', body: formData });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.error?.message || `HTTP ${res.status}`); }
-      flash('success', type === 'video' ? 'Video uploadee' : 'Ressource uploadee');
+      showToast(type === 'video' ? 'Vidéo uploadée' : 'Ressource uploadée', 'success');
       loadData();
-    } catch (err: unknown) { flash('error', err instanceof Error ? err.message : 'Erreur upload'); }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Erreur upload', 'error'); }
     setUploadingId(null);
   }
 
@@ -148,7 +144,7 @@ export default function AdminModuleDetailPage() {
       {/* Header */}
       <a href={`/admin/formations/${formationId}`} className="text-sm text-gray-500 hover:text-brand-700 transition-colors inline-flex items-center gap-1 mb-2">
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
-        Retour a la formation
+        Retour à la formation
       </a>
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -160,18 +156,14 @@ export default function AdminModuleDetailPage() {
         </button>
       </div>
 
-      {message && (
-        <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>{message.text}</div>
-      )}
-
       {/* UA form */}
       {showUAForm && (
         <UAForm
           moduleId={moduleId}
           initial={editingUA}
-          onSave={() => { setShowUAForm(false); loadData(); flash('success', editingUA ? 'UA modifiee' : 'UA creee'); }}
+          onSave={() => { setShowUAForm(false); loadData(); showToast(editingUA ? 'UA modifiée' : 'UA créée', 'success'); }}
           onCancel={() => setShowUAForm(false)}
-          onError={(msg) => flash('error', msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 
@@ -180,7 +172,7 @@ export default function AdminModuleDetailPage() {
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Editeur de quiz</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Éditeur de quiz</h2>
               <button onClick={() => { setQuizUaId(null); setQuizData(null); setQuizError(null); }} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
@@ -192,7 +184,7 @@ export default function AdminModuleDetailPage() {
               {quizData.questions.map((q, qi) => (
                 <div key={qi} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start justify-between mb-3">
-                    <span className="text-xs font-medium text-gray-400">Q{qi + 1} — {q.type === 'mcq' ? 'QCM' : q.type === 'truefalse' ? 'Vrai/Faux' : 'Reponse courte'}</span>
+                    <span className="text-xs font-medium text-gray-400">Q{qi + 1} — {q.type === 'mcq' ? 'QCM' : q.type === 'truefalse' ? 'Vrai/Faux' : 'Réponse courte'}</span>
                     <button onClick={() => setQuizData({ ...quizData, questions: quizData.questions.filter((_, i) => i !== qi) })} className="text-red-400 hover:text-red-600 text-xs">Supprimer</button>
                   </div>
                   <input type="text" value={q.text} onChange={(e) => { const qs = [...quizData.questions]; qs[qi] = { ...qs[qi], text: e.target.value }; setQuizData({ ...quizData, questions: qs }); }}
@@ -229,14 +221,14 @@ export default function AdminModuleDetailPage() {
                     </div>
                   )}
 
-                  {q.type === 'short' && <p className="text-xs text-gray-400 italic">Reponse libre declarative</p>}
+                  {q.type === 'short' && <p className="text-xs text-gray-400 italic">Réponse libre déclarative</p>}
                 </div>
               ))}
 
               <div className="flex gap-2 pt-2">
                 <button onClick={() => addQuestion('mcq')} className="px-3 py-1.5 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">+ QCM</button>
                 <button onClick={() => addQuestion('truefalse')} className="px-3 py-1.5 text-xs bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100">+ Vrai/Faux</button>
-                <button onClick={() => addQuestion('short')} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">+ Reponse courte</button>
+                <button onClick={() => addQuestion('short')} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">+ Réponse courte</button>
               </div>
             </div>
 
@@ -264,10 +256,10 @@ export default function AdminModuleDetailPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
                     <th className="w-10 px-2 py-3" />
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">UA</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 280, maxWidth: 280 }}>UA</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Type</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Fichier</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publie</th>
+                    <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publié</th>
                     <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
                   </tr>
                 </thead>
@@ -281,7 +273,7 @@ export default function AdminModuleDetailPage() {
                       onUpload={(type, file) => handleUpload(ua.id, type, file)}
                       onDelete={() => handleDeleteUA(ua.id, ua.title)}
                       onUpdate={() => { loadData(); }}
-                      onFlash={flash}
+                      onFlash={showToast}
                     />
                   ))}
                 </tbody>
@@ -299,7 +291,7 @@ export default function AdminModuleDetailPage() {
 function SortableUARow(props: {
   ua: UA; uploadingId: string | null; onOpenQuiz: () => void;
   onUpload: (type: 'video' | 'resource', file: File) => void;
-  onDelete: () => void; onUpdate: () => void; onFlash: (type: 'success' | 'error', text: string) => void;
+  onDelete: () => void; onUpdate: () => void; onFlash: (message: string, type?: 'success' | 'error' | 'info') => void;
 }) {
   const { ua, uploadingId, onOpenQuiz, onUpload, onDelete, onUpdate, onFlash } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ua.id });
@@ -311,12 +303,12 @@ function SortableUARow(props: {
   async function saveTitle() {
     if (!editTitle.trim() || editTitle.trim() === ua.title) { setEditing(false); setEditTitle(ua.title); return; }
     try { await api.put(`/admin/uas/${ua.id}`, { title: editTitle.trim() }); setEditing(false); onUpdate(); }
-    catch (err: unknown) { onFlash('error', err instanceof Error ? err.message : 'Erreur'); }
+    catch (err: unknown) { onFlash(err instanceof Error ? err.message : 'Erreur', 'error'); }
   }
 
   async function handleTogglePublish() {
     try { await api.put(`/admin/uas/${ua.id}`, { isPublished: !ua.isPublished }); onUpdate(); }
-    catch (err: unknown) { onFlash('error', err instanceof Error ? err.message : 'Erreur'); }
+    catch (err: unknown) { onFlash(err instanceof Error ? err.message : 'Erreur', 'error'); }
   }
 
   const typeLabels: Record<string, string> = { video: 'Video', quiz: 'Quiz', resource: 'Ressource' };
@@ -325,18 +317,18 @@ function SortableUARow(props: {
   return (
     <tr ref={setNodeRef} style={style} className="hover:bg-gray-50">
       <td className="w-10 px-2 py-3 text-center">
-        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none" title="Glisser pour reordonner">
+        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none" title="Glisser pour réordonner">
           <span className="text-lg leading-none">&#10303;</span>
         </button>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3" style={{ width: 280, maxWidth: 280 }}>
         {editing ? (
           <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditing(false); setEditTitle(ua.title); } }}
             onBlur={saveTitle} autoFocus
-            className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full" />
+            className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full box-border" />
         ) : (
-          <p onClick={() => { setEditTitle(ua.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300">{ua.title}</p>
+          <p onClick={() => { setEditTitle(ua.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300 truncate">{ua.title}</p>
         )}
       </td>
       <td className="px-4 py-3 hidden sm:table-cell">
@@ -346,13 +338,13 @@ function SortableUARow(props: {
       <td className="px-4 py-3 hidden md:table-cell text-center"><Toggle checked={ua.isPublished} onChange={handleTogglePublish} /></td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-1">
-          {ua.type === 'quiz' && <button onClick={onOpenQuiz} className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded">Editer quiz</button>}
+          {ua.type === 'quiz' && <button onClick={onOpenQuiz} className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded">Éditer quiz</button>}
           {ua.type === 'resource' && (
             <>
               {ua.resource && (
                 <>
                   <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/resources/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
-                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string;fileName:string}}>(`/admin/resources/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=r.data.fileName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Telecharger</button>
+                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string;fileName:string}}>(`/admin/resources/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=r.data.fileName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Télécharger</button>
                 </>
               )}
               <label className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded cursor-pointer">
@@ -366,7 +358,7 @@ function SortableUARow(props: {
               {ua.videoContent && (
                 <>
                   <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
-                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=ua.videoContent!.originalName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Telecharger</button>
+                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=ua.videoContent!.originalName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Télécharger</button>
                 </>
               )}
               <label className="px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded cursor-pointer">
@@ -446,7 +438,7 @@ function UAForm({ moduleId, initial, onSave, onCancel, onError }: {
         )}
         <div className="flex items-center gap-2">
           <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} id="ua-pub" className="w-4 h-4" />
-          <label htmlFor="ua-pub" className="text-sm text-gray-700">Publiee</label>
+          <label htmlFor="ua-pub" className="text-sm text-gray-700">Publiée</label>
         </div>
         <div className="flex gap-3">
           <button type="submit" disabled={saving} className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>

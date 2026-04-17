@@ -97,7 +97,7 @@ export default function AdminApprenantsPage() {
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Statut</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Progression</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Derniere activite</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Dernière activité</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

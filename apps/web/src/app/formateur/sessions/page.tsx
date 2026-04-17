@@ -60,7 +60,7 @@ export default function FormateurSessionsPage() {
               href="/formateur/contenus"
               className="px-4 py-2 text-sm font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
             >
-              Gerer les contenus
+              Gérer les contenus
             </a>
           </div>
         </div>

@@ -177,7 +177,7 @@ export default function QuizPage() {
             {result.scorePercent !== null ? (
               <p className="text-3xl font-bold text-brand-600 mb-2">{result.scorePercent}%</p>
             ) : (
-              <p className="text-lg text-gray-600 mb-2">Reponses enregistrees</p>
+              <p className="text-lg text-gray-600 mb-2">Réponses enregistrées</p>
             )}
             <p className="text-sm text-gray-500">
               Tentative n&deg;{result.attemptNumber} — Le quiz ne bloque pas votre progression.
@@ -213,7 +213,7 @@ export default function QuizPage() {
                         {i + 1}. {q.text}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {q.type === 'short' ? 'Reponse declarative enregistree' : isCorrect ? 'Correct' : 'Incorrect'}
+                        {q.type === 'short' ? 'Réponse déclarative enregistrée' : isCorrect ? 'Correct' : 'Incorrect'}
                       </p>
                     </div>
                   </div>
@@ -234,7 +234,7 @@ export default function QuizPage() {
               href={`/formations/${ua.formationId}`}
               className="flex-1 px-4 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm text-center"
             >
-              Retour a la formation
+              Retour à la formation
             </a>
           </div>
 
@@ -315,7 +315,7 @@ export default function QuizPage() {
                 <textarea
                   value={answers[q.id] || ''}
                   onChange={(e) => setAnswer(q.id, e.target.value)}
-                  placeholder="Votre reponse..."
+                  placeholder="Votre réponse..."
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-y"
                 />
@@ -330,7 +330,7 @@ export default function QuizPage() {
           disabled={submitting || !allAnswered}
           className="w-full py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {submitting ? 'Envoi en cours...' : 'Soumettre mes reponses'}
+          {submitting ? 'Envoi en cours...' : 'Soumettre mes réponses'}
         </button>
 
         {!allAnswered && (

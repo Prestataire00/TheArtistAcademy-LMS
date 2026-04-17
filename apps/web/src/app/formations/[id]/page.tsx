@@ -212,7 +212,7 @@ export default function FormationPage() {
               <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Formation terminee — vous pouvez revoir le contenu tant que votre acces est ouvert.
+              Formation terminée — vous pouvez revoir le contenu tant que votre accès est ouvert.
             </div>
           )}
 
@@ -225,7 +225,7 @@ export default function FormationPage() {
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500 mb-3">
             <span>Du {formatDate(enrollment.startDate)} au {formatDate(enrollment.endDate)}</span>
             <span>Temps : {formatDuration(progress.timeSpentSeconds)}</span>
-            <span>{progress.completedUAs}/{progress.totalUAs} activites</span>
+            <span>{progress.completedUAs}/{progress.totalUAs} activités</span>
           </div>
 
           {/* Tabs */}

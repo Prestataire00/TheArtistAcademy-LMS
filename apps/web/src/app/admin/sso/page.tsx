@@ -60,7 +60,7 @@ export default function AdminSsoPage() {
           </p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-500 mb-1">Derniere connexion reussie</p>
+          <p className="text-xs text-gray-500 mb-1">Dernière connexion réussie</p>
           <p className="text-sm font-medium text-gray-900">
             {lastSuccess ? new Date(lastSuccess.timestamp).toLocaleString('fr-FR') : 'Aucune'}
           </p>

@@ -7,6 +7,7 @@ import { SlideOver } from '@/components/SlideOver';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useToast } from '@/components/admin/ToastContext';
 
 interface UA { id: string; title: string; type: string; position: number; isPublished: boolean }
 interface Module { id: string; formationId: string; title: string; description: string | null; position: number; isPublished: boolean; uas: UA[] }
@@ -22,9 +23,9 @@ export default function AdminFormationDetailPage() {
   const [formation, setFormation] = useState<FormationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showModuleForm, setShowModuleForm] = useState(false);
   const [editingModule, setEditingModule] = useState<Module | null>(null);
+  const { showToast } = useToast();
 
   const loadData = useCallback(() => {
     if (!formationId) return;
@@ -36,26 +37,21 @@ export default function AdminFormationDetailPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  function flash(type: 'success' | 'error', text: string) {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
-  }
-
   async function handleDeleteModule(id: string, title: string) {
     if (!confirm(`Supprimer le module "${title}" et toutes ses UAs ?`)) return;
     try {
       await api.delete(`/admin/modules/${id}`);
-      flash('success', 'Module supprime');
+      showToast('Module supprimé', 'success');
       loadData();
-    } catch (err: unknown) { flash('error', err instanceof Error ? err.message : 'Erreur'); }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Erreur', 'error'); }
   }
 
   async function handleDuplicateModule(id: string) {
     try {
       await api.post(`/admin/modules/${id}/duplicate`);
-      flash('success', 'Module duplique');
+      showToast('Module dupliqué', 'success');
       loadData();
-    } catch (err: unknown) { flash('error', err instanceof Error ? err.message : 'Erreur'); }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Erreur', 'error'); }
   }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -76,7 +72,7 @@ export default function AdminFormationDetailPage() {
       });
       loadData();
     } catch (err: unknown) {
-      flash('error', err instanceof Error ? err.message : 'Erreur');
+      showToast(err instanceof Error ? err.message : 'Erreur', 'error');
       loadData();
     }
   }
@@ -97,10 +93,10 @@ export default function AdminFormationDetailPage() {
             <h1 className="text-2xl font-bold text-gray-900">{formation.title}</h1>
             <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
               <span className={`px-2 py-0.5 rounded-full text-xs ${formation.pathwayMode === 'linear' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-                {formation.pathwayMode === 'linear' ? 'Lineaire' : 'Libre'}
+                {formation.pathwayMode === 'linear' ? 'Linéaire' : 'Libre'}
               </span>
               <span>Seuil : {formation.videoCompletionThreshold}%</span>
-              <span>{formation.isPublished ? 'Publiee' : 'Brouillon'}</span>
+              <span>{formation.isPublished ? 'Publiée' : 'Brouillon'}</span>
             </div>
           </div>
           <button
@@ -112,20 +108,14 @@ export default function AdminFormationDetailPage() {
         </div>
       </div>
 
-      {message && (
-        <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
-
       {/* Module slide-over */}
       {showModuleForm && (
         <ModuleSlideOver
           formationId={formationId}
           initial={editingModule}
-          onSave={() => { setShowModuleForm(false); setEditingModule(null); loadData(); flash('success', editingModule ? 'Module modifie' : 'Module cree'); }}
+          onSave={() => { setShowModuleForm(false); setEditingModule(null); loadData(); showToast(editingModule ? 'Module modifié' : 'Module créé', 'success'); }}
           onClose={() => { setShowModuleForm(false); setEditingModule(null); }}
-          onError={(msg) => flash('error', msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 
@@ -142,9 +132,9 @@ export default function AdminFormationDetailPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
                     <th className="w-10 px-2 py-3" />
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">Module</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 300, maxWidth: 300 }}>Module</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">UAs</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publie</th>
+                    <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publié</th>
                     <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
                   </tr>
                 </thead>
@@ -189,18 +179,18 @@ function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, on
   return (
     <tr ref={setNodeRef} style={style} className="hover:bg-gray-50">
       <td className="w-10 px-2 py-3 text-center">
-        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none" title="Glisser pour reordonner">
+        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none" title="Glisser pour réordonner">
           <span className="text-lg leading-none">&#10303;</span>
         </button>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3" style={{ width: 300, maxWidth: 300 }}>
         {editing ? (
           <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditing(false); setEditTitle(mod.title); } }}
             onBlur={saveTitle} autoFocus
-            className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full" />
+            className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full box-border" />
         ) : (
-          <p onClick={() => { setEditTitle(mod.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300">{mod.title}</p>
+          <p onClick={() => { setEditTitle(mod.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300 truncate">{mod.title}</p>
         )}
       </td>
       <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{mod.uas.length}</td>
@@ -209,8 +199,8 @@ function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, on
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-1">
-          <a href={`/admin/formations/${formationId}/modules/${mod.id}`} className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded font-medium">Gerer les UAs</a>
-          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Modifier la description">
+          <a href={`/admin/formations/${formationId}/modules/${mod.id}`} className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded font-medium">Gérer les UAs</a>
+          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Modifier">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
             </svg>
@@ -260,7 +250,7 @@ function ModuleSlideOver({ formationId, initial, onSave, onClose, onError }: {
       <div className="space-y-5">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" /></div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" /></div>
-        <div className="flex items-center gap-3"><Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} /><span className="text-sm text-gray-700">{isPublished ? 'Publie' : 'Brouillon'}</span></div>
+        <div className="flex items-center gap-3"><Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} /><span className="text-sm text-gray-700">{isPublished ? 'Publié' : 'Brouillon'}</span></div>
       </div>
     </SlideOver>
   );

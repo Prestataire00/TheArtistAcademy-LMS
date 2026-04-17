@@ -117,7 +117,7 @@ export default function FormateurContenusPage() {
           return;
         }
         if (!q.choices.some((c) => c.isCorrect)) {
-          setQuizError(`Question ${i + 1} : selectionnez la bonne reponse`);
+          setQuizError(`Question ${i + 1} : sélectionnez la bonne réponse`);
           return;
         }
       }
@@ -167,7 +167,7 @@ export default function FormateurContenusPage() {
     if (!confirm('Supprimer cette ressource ?')) return;
     try {
       await api.delete(`/formateur/contenus/uas/${uaId}/resource`);
-      setMessage({ type: 'success', text: 'Ressource supprimee' });
+      setMessage({ type: 'success', text: 'Ressource supprimée' });
       loadData();
     } catch (err: unknown) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Erreur' });
@@ -377,7 +377,7 @@ function QuizEditor({
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Editeur de quiz</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Éditeur de quiz</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -394,7 +394,7 @@ function QuizEditor({
             <div key={qi} className="border border-gray-200 rounded-lg p-4">
               <div className="flex items-start justify-between gap-2 mb-3">
                 <span className="text-xs font-medium text-gray-400 mt-1">
-                  Q{qi + 1} — {q.type === 'mcq' ? 'QCM' : q.type === 'truefalse' ? 'Vrai/Faux' : 'Reponse courte'}
+                  Q{qi + 1} — {q.type === 'mcq' ? 'QCM' : q.type === 'truefalse' ? 'Vrai/Faux' : 'Réponse courte'}
                 </span>
                 <button onClick={() => onRemoveQuestion(qi)} className="text-red-400 hover:text-red-600 text-xs">Supprimer</button>
               </div>
@@ -407,7 +407,7 @@ function QuizEditor({
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
 
-              {/* ─── QCM : choix editables + radio pour la bonne reponse ─── */}
+              {/* ─── QCM : choix éditables + radio pour la bonne réponse ─── */}
               {q.type === 'mcq' && (
                 <div className="space-y-2 mb-2">
                   {q.choices.map((c, ci) => (
@@ -421,7 +421,7 @@ function QuizEditor({
                           q.choices.forEach((_, idx) => onUpdateChoice(qi, idx, 'isCorrect', idx === ci));
                         }}
                         className="w-4 h-4 text-green-600 accent-green-600"
-                        title="Bonne reponse"
+                        title="Bonne réponse"
                       />
                       <input
                         type="text"
@@ -462,9 +462,9 @@ function QuizEditor({
                 </div>
               )}
 
-              {/* ─── Reponse courte : pas de choix ─── */}
+              {/* ─── Réponse courte : pas de choix ─── */}
               {q.type === 'short' && (
-                <p className="text-xs text-gray-400 italic">Reponse libre — enregistree en declaratif, sans auto-correction</p>
+                <p className="text-xs text-gray-400 italic">Réponse libre — enregistrée en déclaratif, sans auto-correction</p>
               )}
             </div>
           ))}
@@ -473,7 +473,7 @@ function QuizEditor({
           <div className="flex gap-2 pt-2">
             <button onClick={() => onAddQuestion('mcq')} className="px-3 py-1.5 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">+ QCM</button>
             <button onClick={() => onAddQuestion('truefalse')} className="px-3 py-1.5 text-xs bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100">+ Vrai/Faux</button>
-            <button onClick={() => onAddQuestion('short')} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">+ Reponse courte</button>
+            <button onClick={() => onAddQuestion('short')} className="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">+ Réponse courte</button>
           </div>
         </div>
 

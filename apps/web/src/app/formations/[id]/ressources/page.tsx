@@ -108,7 +108,7 @@ export default function RessourcesPage() {
           <h1 className="text-xl font-semibold text-gray-900 mb-2">Impossible de charger les ressources</h1>
           <p className="text-gray-500 mb-6">{error || 'Erreur inconnue'}</p>
           <a href={`/formations/${formationId}`} className="inline-block px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">
-            Retour a la formation
+            Retour à la formation
           </a>
         </div>
       </div>
@@ -131,7 +131,7 @@ export default function RessourcesPage() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
-            <span>Retour a la formation</span>
+            <span>Retour à la formation</span>
           </a>
           <div className="h-4 w-px bg-gray-200 flex-shrink-0" />
           <h1 className="text-base font-semibold text-gray-900">Ressources</h1>
@@ -223,7 +223,7 @@ function ResourceRow({
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
           )}
-          <span className="hidden sm:inline">Telecharger</span>
+          <span className="hidden sm:inline">Télécharger</span>
         </button>
     </div>
   );

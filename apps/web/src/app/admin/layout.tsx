@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { ToastProvider } from '@/components/admin/ToastContext';
 
 const navItems = [
   { href: '/admin', label: 'Tableau de bord', exact: true },
@@ -42,7 +43,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
       </aside>
-      <main className="flex-1 p-8 bg-light overflow-auto">{children}</main>
+      <main className="flex-1 p-8 bg-light overflow-auto">
+        <ToastProvider>{children}</ToastProvider>
+      </main>
     </div>
   );
 }

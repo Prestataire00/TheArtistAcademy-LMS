@@ -151,7 +151,7 @@ function ResourceAutoDownload({ uaId, formationId }: { uaId: string; formationId
       <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
         <p className="text-gray-500 mb-4">Impossible de charger la ressource</p>
         <a href={`/formations/${formationId}`} className="text-brand-600 hover:text-brand-700 text-sm font-medium">
-          Retour a la formation
+          Retour à la formation
         </a>
       </div>
     );
@@ -174,13 +174,13 @@ function ResourceAutoDownload({ uaId, formationId }: { uaId: string; formationId
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
           </svg>
-          Telecharger
+          Télécharger
         </a>
         <a
           href={`/formations/${formationId}`}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
         >
-          Retour a la formation
+          Retour à la formation
         </a>
       </div>
     </div>

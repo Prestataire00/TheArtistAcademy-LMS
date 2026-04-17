@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { SlideOver } from '@/components/SlideOver';
+import { useToast } from '@/components/admin/ToastContext';
 
 interface StaffUser {
   id: string;
@@ -18,8 +19,10 @@ export default function AdminUtilisateursPage() {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState('');
+  const { showToast } = useToast();
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -31,28 +34,36 @@ export default function AdminUtilisateursPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  function flash(type: 'success' | 'error', text: string) {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 4000);
+  async function handleNameSave(user: StaffUser) {
+    const trimmed = editingNameValue.trim();
+    if (!trimmed || trimmed === user.fullName) { setEditingName(null); return; }
+    try {
+      await api.put(`/admin/utilisateurs/${user.id}`, { fullName: trimmed });
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, fullName: trimmed } : u));
+      showToast('Nom mis à jour', 'success');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Erreur', 'error');
+    }
+    setEditingName(null);
   }
 
   async function handleRoleChange(user: StaffUser, newRole: string) {
     try {
       await api.put(`/admin/utilisateurs/${user.id}`, { role: newRole });
-      flash('success', `Role de ${user.fullName} mis a jour`);
-      loadData();
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u));
+      showToast(`Rôle de ${user.fullName} mis à jour`, 'success');
     } catch (err: unknown) {
-      flash('error', err instanceof Error ? err.message : 'Erreur');
+      showToast(err instanceof Error ? err.message : 'Erreur', 'error');
     }
   }
 
   async function handleResetPassword(user: StaffUser) {
-    if (!confirm(`Reinitialiser le mot de passe de ${user.fullName} ?`)) return;
+    if (!confirm(`Réinitialiser le mot de passe de ${user.fullName} ?`)) return;
     try {
       const res = await api.put<{ data: StaffUser; tempPassword: string }>(`/admin/utilisateurs/${user.id}`, { resetPassword: true });
       setTempPassword({ email: user.email, password: res.tempPassword });
     } catch (err: unknown) {
-      flash('error', err instanceof Error ? err.message : 'Erreur');
+      showToast(err instanceof Error ? err.message : 'Erreur', 'error');
     }
   }
 
@@ -60,10 +71,10 @@ export default function AdminUtilisateursPage() {
     if (!confirm(`Supprimer le compte de ${user.fullName} (${user.email}) ?`)) return;
     try {
       await api.delete(`/admin/utilisateurs/${user.id}`);
-      flash('success', 'Utilisateur supprime');
+      showToast('Utilisateur supprimé', 'success');
       loadData();
     } catch (err: unknown) {
-      flash('error', err instanceof Error ? err.message : 'Erreur');
+      showToast(err instanceof Error ? err.message : 'Erreur', 'error');
     }
   }
 
@@ -85,12 +96,6 @@ export default function AdminUtilisateursPage() {
         </button>
       </div>
 
-      {message && (
-        <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
-
       {/* Modal mot de passe temporaire */}
       {tempPassword && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -108,9 +113,9 @@ export default function AdminUtilisateursPage() {
 
       {showCreate && (
         <CreateUserSlideOver
-          onSave={() => { setShowCreate(false); loadData(); flash('success', 'Utilisateur cree'); }}
+          onSave={() => { setShowCreate(false); loadData(); showToast('Utilisateur créé', 'success'); }}
           onClose={() => setShowCreate(false)}
-          onError={(msg) => flash('error', msg)}
+          onError={(msg) => showToast(msg, 'error')}
         />
       )}
 
@@ -123,18 +128,34 @@ export default function AdminUtilisateursPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Nom</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 200, maxWidth: 200 }}>Nom</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Email</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Role</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Cree le</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Derniere connexion</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Créé le</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Dernière connexion</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{u.fullName}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900" style={{ width: 200, maxWidth: 200 }}>
+                    {editingName === u.id ? (
+                      <input
+                        autoFocus
+                        value={editingNameValue}
+                        onChange={(e) => setEditingNameValue(e.target.value)}
+                        onBlur={() => handleNameSave(u)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleNameSave(u); if (e.key === 'Escape') setEditingName(null); }}
+                        className="w-full px-2 py-0.5 -ml-2 border border-brand-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 box-border"
+                      />
+                    ) : (
+                      <span
+                        onClick={() => { setEditingName(u.id); setEditingNameValue(u.fullName); }}
+                        className="cursor-pointer hover:underline hover:text-brand-700 transition-colors"
+                      >{u.fullName}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{u.email}</td>
                   <td className="px-4 py-3">
                     <select
@@ -150,7 +171,7 @@ export default function AdminUtilisateursPage() {
                   <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{formatDate(u.lastSeenAt)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleResetPassword(u)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Reinit. mdp</button>
+                      <button onClick={() => handleResetPassword(u)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Réinit. mdp</button>
                       <button onClick={() => handleDelete(u)} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors">Supprimer</button>
                     </div>
                   </td>
