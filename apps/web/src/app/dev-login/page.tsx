@@ -108,7 +108,7 @@ export default function DevLoginPage() {
             style={{
               width: '100%',
               padding: '0.625rem 1rem',
-              backgroundColor: '#9333ea',
+              backgroundColor: '#B5294E',
               color: '#fff',
               borderRadius: '8px',
               border: 'none',
@@ -127,7 +127,7 @@ export default function DevLoginPage() {
             style={{
               width: '100%',
               padding: '0.625rem 1rem',
-              backgroundColor: '#0369a1',
+              backgroundColor: '#52545F',
               color: '#fff',
               borderRadius: '8px',
               border: 'none',
@@ -146,7 +146,7 @@ export default function DevLoginPage() {
             style={{
               width: '100%',
               padding: '0.625rem 1rem',
-              backgroundColor: '#111827',
+              backgroundColor: '#272831',
               color: '#fff',
               borderRadius: '8px',
               border: 'none',

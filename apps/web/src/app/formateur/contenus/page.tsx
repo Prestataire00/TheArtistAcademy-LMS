@@ -210,7 +210,7 @@ export default function FormateurContenusPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-light">
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
           <a href="/formateur/sessions" className="text-sm text-gray-500 hover:text-brand-700 transition-colors mb-2 inline-flex items-center gap-1">

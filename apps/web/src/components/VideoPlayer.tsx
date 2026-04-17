@@ -155,7 +155,7 @@ export function VideoPlayer({ uaId, completionThreshold = 99 }: VideoPlayerProps
 
   if (error) {
     return (
-      <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center">
+      <div className="aspect-video bg-dark rounded-lg flex items-center justify-center">
         <div className="text-center px-6">
           <p className="text-white font-medium mb-1">Impossible de charger la video</p>
           <p className="text-gray-400 text-sm">{error}</p>
@@ -169,7 +169,7 @@ export function VideoPlayer({ uaId, completionThreshold = 99 }: VideoPlayerProps
       <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
         {/* Loading overlay */}
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-dark z-10">
             <div className="flex items-center gap-3 text-gray-400">
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               <span className="text-sm">Chargement...</span>

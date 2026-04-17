@@ -20,10 +20,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-64 bg-gray-900 text-white p-6 flex-shrink-0">
+      <aside className="w-64 bg-dark text-white p-6 flex-shrink-0">
         <a href="/admin" className="block mb-8">
-          <h2 className="font-bold text-lg">Admin LMS</h2>
-          <p className="text-xs text-gray-500">The Artist Academy</p>
+          <img src="/logo-light.png" alt="The Artist Academy" className="h-10 mb-2" />
+          <p className="text-xs text-dark-muted">Administration</p>
         </a>
         <nav className="space-y-1">
           {navItems.map((item) => (
@@ -32,8 +32,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               href={item.href}
               className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                 isActive(item.href, item.exact)
-                  ? 'bg-gray-800 text-white font-medium'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  ? 'bg-brand-600/20 text-brand-400 font-medium'
+                  : 'text-dark-muted hover:text-white hover:bg-white/5'
               }`}
             >
               {item.label}
@@ -41,7 +41,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
       </aside>
-      <main className="flex-1 p-8 bg-gray-50 overflow-auto">{children}</main>
+      <main className="flex-1 p-8 bg-light overflow-auto">{children}</main>
     </div>
   );
 }

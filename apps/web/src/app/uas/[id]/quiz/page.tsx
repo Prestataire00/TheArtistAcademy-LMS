@@ -163,7 +163,7 @@ export default function QuizPage() {
     const correctMap = new Map(result.answers.map((a) => [a.questionId, a.isCorrect]));
 
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-light">
         <Header ua={ua} />
         <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
           {/* Score card */}
@@ -248,7 +248,7 @@ export default function QuizPage() {
   // ─── Quiz form ───────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-light">
       <Header ua={ua} />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         {/* Title & instructions */}

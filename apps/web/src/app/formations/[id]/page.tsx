@@ -156,15 +156,16 @@ export default function FormationPage() {
   const isCompleted = progress.status === 'completed';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-light">
       {/* ─── Header ──────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-6 py-8">
-          {/* Top bar avec lien Dendreo */}
-          <div className="flex items-center justify-end mb-4">
+          {/* Top bar avec logo + lien Dendreo */}
+          <div className="flex items-center justify-between mb-6">
+            <img src="/logo-dark.png" alt="The Artist Academy" className="h-8" />
             <a
               href={process.env.NEXT_PUBLIC_DENDREO_EXTRANET_URL || '#'}
-              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-brand-700 transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-dark-muted hover:text-brand-600 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
@@ -237,7 +238,7 @@ export default function FormationPage() {
           {isCompleted ? (
             <a
               href={continueUaId ? `/uas/${modules[0]?.uas[0]?.id}` : '#'}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-dark text-white rounded-lg hover:bg-dark-light transition-colors font-medium"
             >
               Revoir le contenu
             </a>

@@ -4,6 +4,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'The Artist Academy — LMS',
   description: 'Plateforme e-learning The Artist Academy',
+  icons: {
+    icon: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -12,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <meta charSet="utf-8" />
       </head>
-      <body>{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

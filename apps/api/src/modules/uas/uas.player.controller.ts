@@ -16,6 +16,10 @@ export async function playerGetUA(req: Request, res: Response) {
     ? await prisma.videoContent.findUnique({ where: { uaId }, select: { durationSeconds: true } })
     : null;
 
+  const resource = ua.type === 'resource'
+    ? await prisma.resource.findUnique({ where: { uaId }, select: { id: true, fileName: true } })
+    : null;
+
   res.json({
     data: {
       id: ua.id,
@@ -24,6 +28,8 @@ export async function playerGetUA(req: Request, res: Response) {
       formationId: formation.id,
       formationTitle: formation.title,
       durationSeconds: videoContent?.durationSeconds ?? null,
+      resourceId: resource?.id ?? null,
+      resourceFileName: resource?.fileName ?? null,
     },
   });
 }

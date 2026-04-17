@@ -26,7 +26,10 @@ export async function uploadResource(
     throw new BadRequestError('Format non accepté. Formats autorisés : PDF, PPT, PPTX');
   }
 
-  const ext = file.originalname.split('.').pop() || 'pdf';
+  // Fix encodage: multer encode les noms en latin1, on decode en utf8
+  const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+  const ext = originalName.split('.').pop() || 'pdf';
   const storagePath = `${uaId}/${Date.now()}.${ext}`;
 
   // Supprimer l'ancienne ressource si elle existe
@@ -51,7 +54,7 @@ export async function uploadResource(
   const resource = await prisma.resource.upsert({
     where: { uaId },
     update: {
-      fileName: file.originalname,
+      fileName: originalName,
       fileUrl: storagePath,
       fileType: file.mimetype,
       fileSizeBytes: file.size,
@@ -59,7 +62,7 @@ export async function uploadResource(
     },
     create: {
       uaId,
-      fileName: file.originalname,
+      fileName: originalName,
       fileUrl: storagePath,
       fileType: file.mimetype,
       fileSizeBytes: file.size,

@@ -16,7 +16,10 @@ export async function uploadVideo(
   if (!ua) throw new NotFoundError('UA');
   if (ua.type !== 'video') throw new BadRequestError("Cette UA n'est pas de type vidéo");
 
-  const ext = file.originalname.split('.').pop() || 'mp4';
+  // Fix encodage: multer encode les noms en latin1, on decode en utf8
+  const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+  const ext = originalName.split('.').pop() || 'mp4';
   const storagePath = `${uaId}/${Date.now()}.${ext}`;
 
   // Upload vers Supabase Storage (bucket privé)
@@ -42,7 +45,7 @@ export async function uploadVideo(
     where: { uaId },
     update: {
       storagePath,
-      originalName: file.originalname,
+      originalName,
       mimeType: file.mimetype,
       fileSizeBytes: file.size,
       durationSeconds: durationSeconds ?? null,
@@ -51,7 +54,7 @@ export async function uploadVideo(
     create: {
       uaId,
       storagePath,
-      originalName: file.originalname,
+      originalName,
       mimeType: file.mimetype,
       fileSizeBytes: file.size,
       durationSeconds: durationSeconds ?? null,
