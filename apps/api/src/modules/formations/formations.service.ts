@@ -1,5 +1,5 @@
 import { prisma } from '../../config/database';
-import { NotFoundError } from '../../shared/errors';
+import { NotFoundError, BadRequestError } from '../../shared/errors';
 
 export async function listFormations() {
   const formations = await prisma.formation.findMany({
@@ -102,8 +102,16 @@ export async function updateFormation(
 }
 
 export async function deleteFormation(id: string) {
-  const exists = await prisma.formation.findUnique({ where: { id } });
+  const exists = await prisma.formation.findUnique({
+    where: { id },
+    include: { _count: { select: { enrollments: true } } },
+  });
   if (!exists) throw new NotFoundError('Formation');
+  if (exists._count.enrollments > 0) {
+    throw new BadRequestError(
+      `Impossible de supprimer : ${exists._count.enrollments} inscription(s) liée(s) à cette formation`,
+    );
+  }
   await prisma.formation.delete({ where: { id } });
 }
 
