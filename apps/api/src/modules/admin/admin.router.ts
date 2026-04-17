@@ -9,6 +9,12 @@ import { createSignedUrl } from '../videos/videos.service';
 export const adminRouter = Router();
 adminRouter.use(authenticate, requireRole('admin'));
 
+// GET /api/v1/admin/trainers — Liste des formateurs (pour assignation)
+adminRouter.get('/trainers', asyncHandler(async (_req: Request, res: Response) => {
+  const data = await service.listTrainers();
+  res.json({ data });
+}));
+
 // GET /api/v1/admin/dashboard/stats
 adminRouter.get('/dashboard/stats', asyncHandler(async (_req: Request, res: Response) => {
   const data = await service.getDashboardStats();

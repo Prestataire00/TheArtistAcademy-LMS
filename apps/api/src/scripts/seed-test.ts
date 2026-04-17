@@ -227,6 +227,32 @@ async function main() {
     }
   }
 
+  // ─── 11. Associer le formateur aux formations existantes ─────────────────────
+  const trainer = await prisma.user.upsert({
+    where: { email: 'formateur@the-artist-academy.fr' },
+    update: { lastSeenAt: now },
+    create: {
+      email: 'formateur@the-artist-academy.fr',
+      fullName: 'Formateur TAA',
+      role: 'trainer',
+      lastSeenAt: now,
+    },
+  });
+
+  const formationsToAssign = await prisma.formation.findMany({
+    where: { title: { in: ['Formation Automatisation', 'Art Numerique - Initiation'] } },
+  });
+
+  for (const f of formationsToAssign) {
+    await prisma.formation.update({
+      where: { id: f.id },
+      data: { trainerId: trainer.id },
+    });
+  }
+
+  console.log(`  Trainer    : ${trainer.id} (${trainer.email})`);
+  console.log(`    Formations associees : ${formationsToAssign.map(f => f.title).join(', ') || 'aucune trouvee'}`);
+
   console.log('Seed termine :');
   console.log(`  Formation  : ${formation.id}`);
   console.log(`  Module     : ${module.id}`);

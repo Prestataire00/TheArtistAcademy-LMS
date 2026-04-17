@@ -8,6 +8,14 @@ export const ssoRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+export const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 tentatives par IP
+  message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Trop de tentatives de connexion, reessayez dans 15 minutes.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const progressRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 120, // heartbeat toutes les 15s max = 4/min, marge large

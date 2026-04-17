@@ -6,6 +6,7 @@ const navItems = [
   { href: '/admin', label: 'Tableau de bord', exact: true },
   { href: '/admin/formations', label: 'Formations' },
   { href: '/admin/apprenants', label: 'Apprenants' },
+  { href: '/admin/utilisateurs', label: 'Utilisateurs' },
   { href: '/admin/exports', label: 'Exports' },
   { href: '/admin/relances', label: 'Relances' },
   { href: '/admin/sso', label: 'SSO / Diagnostic' },

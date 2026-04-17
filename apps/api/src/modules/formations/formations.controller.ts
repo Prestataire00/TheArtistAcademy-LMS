@@ -11,6 +11,7 @@ const createSchema = z.object({
   pathwayMode: z.enum(['linear', 'free']).default('free'),
   videoCompletionThreshold: z.number().int().min(1).max(100).default(99),
   isPublished: z.boolean().default(false),
+  trainerId: z.string().nullable().optional(),
 });
 
 const updateSchema = createSchema.partial();

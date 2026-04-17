@@ -96,6 +96,7 @@ model User {
   dendreoUserId  String?   @unique @map("dendreo_user_id")
   email          String    @unique
   fullName       String    @map("full_name")
+  passwordHash   String?   @map("password_hash")
   role           UserRole  @default(learner)
   isActive       Boolean   @default(true) @map("is_active")
   createdAt      DateTime  @default(now()) @map("created_at")

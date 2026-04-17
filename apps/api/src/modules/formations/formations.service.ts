@@ -4,7 +4,10 @@ import { NotFoundError } from '../../shared/errors';
 export async function listFormations() {
   const formations = await prisma.formation.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { _count: { select: { modules: true } } },
+    include: {
+      _count: { select: { modules: true } },
+      trainer: { select: { id: true, fullName: true, email: true } },
+    },
   });
   return formations.map((f) => ({
     id: f.id,
@@ -14,6 +17,8 @@ export async function listFormations() {
     pathwayMode: f.pathwayMode,
     videoCompletionThreshold: f.videoCompletionThreshold,
     isPublished: f.isPublished,
+    trainerId: f.trainerId,
+    trainerName: f.trainer?.fullName ?? null,
     createdAt: f.createdAt.toISOString(),
     updatedAt: f.updatedAt.toISOString(),
     modulesCount: f._count.modules,
@@ -74,6 +79,7 @@ export async function createFormation(data: {
   pathwayMode?: 'linear' | 'free';
   videoCompletionThreshold?: number;
   isPublished?: boolean;
+  trainerId?: string | null;
 }) {
   return prisma.formation.create({ data });
 }
@@ -87,6 +93,7 @@ export async function updateFormation(
     pathwayMode?: 'linear' | 'free';
     videoCompletionThreshold?: number;
     isPublished?: boolean;
+    trainerId?: string | null;
   },
 ) {
   const exists = await prisma.formation.findUnique({ where: { id } });

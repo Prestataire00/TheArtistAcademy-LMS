@@ -1,6 +1,17 @@
 import { prisma } from '../../config/database';
 
 /**
+ * Liste des utilisateurs avec le role trainer.
+ */
+export async function listTrainers() {
+  return prisma.user.findMany({
+    where: { role: 'trainer', isActive: true },
+    select: { id: true, fullName: true, email: true },
+    orderBy: { fullName: 'asc' },
+  });
+}
+
+/**
  * Stats globales du dashboard admin.
  */
 export async function getDashboardStats() {

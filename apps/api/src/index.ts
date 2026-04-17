@@ -22,6 +22,7 @@ import { exportsRouter } from './modules/exports/exports.router';
 import { remindersRouter } from './modules/reminders/reminders.router';
 import { formateurRouter } from './modules/formateur/formateur.router';
 import { adminRouter } from './modules/admin/admin.router';
+import { adminUsersRouter } from './modules/admin/users.router';
 import { webhooksRouter } from './modules/webhooks/webhooks.router';
 
 // Jobs
@@ -64,6 +65,7 @@ api.use('/player', playerUAsRouter);
 api.use('/formateur', formateurRouter);
 
 // Admin — autres
+api.use('/admin/utilisateurs', adminUsersRouter);
 api.use('/admin/exports', exportsRouter);
 api.use('/admin/reminder-rules', remindersRouter);
 api.use('/admin', adminRouter);

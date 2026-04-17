@@ -11,8 +11,16 @@ interface Formation {
   pathwayMode: string;
   videoCompletionThreshold: number;
   isPublished: boolean;
+  trainerId: string | null;
+  trainerName: string | null;
   modulesCount: number;
   createdAt: string;
+}
+
+interface Trainer {
+  id: string;
+  fullName: string;
+  email: string;
 }
 
 export default function AdminFormationsPage() {
@@ -94,6 +102,7 @@ export default function AdminFormationsPage() {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Formateur</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Mode</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Modules</th>
                 <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publiee</th>
@@ -107,6 +116,7 @@ export default function AdminFormationsPage() {
                     <p className="font-medium text-gray-900">{f.title}</p>
                     {f.description && <p className="text-xs text-gray-400 truncate max-w-xs">{f.description}</p>}
                   </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs hidden sm:table-cell">{f.trainerName || <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${f.pathwayMode === 'linear' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
                       {f.pathwayMode === 'linear' ? 'Lineaire' : 'Libre'}
@@ -158,13 +168,21 @@ function FormationSlideOver({ initial, onSave, onClose, onError }: {
   const [pathwayMode, setPathwayMode] = useState(initial?.pathwayMode ?? 'free');
   const [threshold, setThreshold] = useState(initial?.videoCompletionThreshold ?? 99);
   const [isPublished, setIsPublished] = useState(initial?.isPublished ?? false);
+  const [trainerId, setTrainerId] = useState<string | null>(initial?.trainerId ?? null);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get<{ data: Trainer[] }>('/admin/trainers')
+      .then((res) => setTrainers(res.data))
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit() {
     if (!title.trim()) { onError('Le titre est requis'); return; }
     setSaving(true);
     try {
-      const body = { title, description: description || undefined, pathwayMode, videoCompletionThreshold: threshold, isPublished };
+      const body = { title, description: description || undefined, pathwayMode, videoCompletionThreshold: threshold, isPublished, trainerId: trainerId || null };
       if (initial) { await api.put(`/admin/formations/${initial.id}`, body); }
       else { await api.post('/admin/formations', body); }
       onSave();
@@ -178,6 +196,13 @@ function FormationSlideOver({ initial, onSave, onClose, onError }: {
       <div className="space-y-5">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" /></div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" /></div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Formateur assigne</label>
+          <select value={trainerId ?? ''} onChange={(e) => setTrainerId(e.target.value || null)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+            <option value="">Aucun formateur</option>
+            {trainers.map((t) => <option key={t.id} value={t.id}>{t.fullName} ({t.email})</option>)}
+          </select>
+        </div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Mode de parcours</label><select value={pathwayMode} onChange={(e) => setPathwayMode(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"><option value="free">Libre (non lineaire)</option><option value="linear">Lineaire</option></select></div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Seuil completion video (%)</label><input type="number" min={1} max={100} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
         <div className="flex items-center gap-3"><Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} /><span className="text-sm text-gray-700">{isPublished ? 'Publiee' : 'Brouillon'}</span></div>
