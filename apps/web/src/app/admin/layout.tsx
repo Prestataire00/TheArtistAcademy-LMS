@@ -24,7 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex min-h-screen">
       <aside className="w-64 bg-dark text-white p-6 flex-shrink-0">
         <a href="/admin" className="block mb-8">
-          <img src="/logo-light.png" alt="The Artist Academy" className="h-10 mb-2" />
+          <img src="/logo-light.png" alt="The Artist Academy" className="h-14 w-auto mb-2" />
           <p className="text-xs text-dark-muted">Administration</p>
         </a>
         <nav className="space-y-1">

@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { SlideOver } from '@/components/SlideOver';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/admin/ToastContext';
+import { Modal } from '@/components/Modal';
+import { SlideOver } from '@/components/SlideOver';
 
 interface ResourceInfo { id: string; fileName: string; fileType: string; fileSizeBytes: number | null }
 interface VideoInfo { id: string; originalName: string; durationSeconds: number | null }
@@ -409,42 +410,43 @@ function UAForm({ moduleId, initial, onSave, onCancel, onError }: {
     setSaving(false);
   }
 
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-      <h3 className="font-semibold text-gray-900 mb-4">{initial ? 'Modifier l\'UA' : 'Nouvelle UA'}</h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
+  const Wrapper = initial ? SlideOver : Modal;
+  const formContent = (
+    <div className="space-y-5">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
+        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+      </div>
+      {!initial && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-        </div>
-        {!initial && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setType('video')}
-                className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                  type === 'video' ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                }`}>Video</button>
-              <button type="button" onClick={() => setType('quiz')}
-                className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                  type === 'quiz' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                }`}>Quiz</button>
-              <button type="button" onClick={() => setType('resource')}
-                className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                  type === 'resource' ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                }`}>Ressource</button>
-            </div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setType('video')}
+              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                type === 'video' ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>Vidéo</button>
+            <button type="button" onClick={() => setType('quiz')}
+              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                type === 'quiz' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>Quiz</button>
+            <button type="button" onClick={() => setType('resource')}
+              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                type === 'resource' ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>Ressource</button>
           </div>
-        )}
-        <div className="flex items-center gap-2">
-          <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} id="ua-pub" className="w-4 h-4" />
-          <label htmlFor="ua-pub" className="text-sm text-gray-700">Publiée</label>
         </div>
-        <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
-          <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button>
-        </div>
-      </form>
+      )}
+      <div className="flex items-center gap-2">
+        <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} id="ua-pub" className="w-4 h-4" />
+        <label htmlFor="ua-pub" className="text-sm text-gray-700">Publiée</label>
+      </div>
     </div>
+  );
+
+  return (
+    <Wrapper title={initial ? 'Modifier l\'UA' : 'Nouvelle UA'} onClose={onCancel}
+      footer={<div className="flex gap-3"><button onClick={onCancel} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button><button onClick={(e) => handleSubmit(e as any)} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button></div>}>
+      {formContent}
+    </Wrapper>
   );
 }

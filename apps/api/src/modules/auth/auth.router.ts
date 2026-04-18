@@ -11,8 +11,8 @@ import { env } from '../../config/env';
 
 export const authRouter = Router();
 
-// POST /api/v1/auth/sso — Validation JWT Dendreo, création session LMS
-authRouter.post('/sso', ssoRateLimiter, asyncHandler(handleSso));
+// GET /api/v1/auth/sso?jwt=xxx&return_to=...&dendreo_return_to=...
+authRouter.get('/sso', ssoRateLimiter, asyncHandler(handleSso));
 
 // POST /api/v1/auth/login — Connexion email + mot de passe (trainer / admin)
 authRouter.post('/login', loginRateLimiter, asyncHandler(handleLogin));

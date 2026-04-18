@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { SlideOver } from '@/components/SlideOver';
+import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/admin/ToastContext';
 
 interface Formation {
@@ -181,8 +182,10 @@ function FormationSlideOver({ initial, onSave, onClose, onError }: {
     setSaving(false);
   }
 
+  const Wrapper = initial ? SlideOver : Modal;
+
   return (
-    <SlideOver title={initial ? 'Modifier la formation' : 'Nouvelle formation'} onClose={onClose}
+    <Wrapper title={initial ? 'Modifier la formation' : 'Nouvelle formation'} onClose={onClose}
       footer={<div className="flex gap-3"><button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button><button onClick={handleSubmit} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button></div>}>
       <div className="space-y-5">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" /></div>
@@ -198,6 +201,6 @@ function FormationSlideOver({ initial, onSave, onClose, onError }: {
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Seuil de complétion vidéo (%)</label><input type="number" min={1} max={100} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
         <div className="flex items-center gap-3"><Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} /><span className="text-sm text-gray-700">{isPublished ? 'Publiée' : 'Brouillon'}</span></div>
       </div>
-    </SlideOver>
+    </Wrapper>
   );
 }

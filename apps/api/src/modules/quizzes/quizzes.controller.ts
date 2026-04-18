@@ -4,6 +4,7 @@ import * as service from './quizzes.service';
 import { verifyLearnerAccess } from '../../shared/enrollment.guard';
 import { logEvent } from '../../shared/eventLog.service';
 import { BadRequestError } from '../../shared/errors';
+import { sendProgressionToDendreo } from '../dendreo/dendreo.progression.service';
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
@@ -118,6 +119,9 @@ export async function playerSubmit(req: Request, res: Response) {
       scorePercent: result.scorePercent,
     },
   });
+
+  // Envoyer la progression à Dendreo en arrière-plan
+  sendProgressionToDendreo(enrollment.id);
 
   res.status(201).json({ data: result });
 }

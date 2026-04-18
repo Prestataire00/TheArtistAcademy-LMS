@@ -56,6 +56,7 @@ enum EventCategory {
   quiz
   reminder
   admin
+  webhook
 }
 
 enum ReminderStatus {
@@ -94,12 +95,14 @@ model UsedJtiToken {
 model User {
   id             String    @id @default(cuid())
   dendreoUserId  String?   @unique @map("dendreo_user_id")
+  externalId     String?   @map("external_id")
   email          String    @unique
   fullName       String    @map("full_name")
   passwordHash          String?   @map("password_hash")
   passwordResetToken    String?   @unique @map("password_reset_token")
   passwordResetExpires  DateTime? @map("password_reset_expires")
   role                  UserRole  @default(learner)
+  tmsOrigin      String?   @map("tms_origin")
   isActive       Boolean   @default(true) @map("is_active")
   createdAt      DateTime  @default(now()) @map("created_at")
   lastSeenAt     DateTime? @map("last_seen_at")
@@ -118,8 +121,9 @@ model Enrollment {
   id                   String           @id @default(cuid())
   userId               String           @map("user_id")
   formationId          String           @map("formation_id")
-  dendreoEnrolmentId   String           @unique @map("dendreo_enrolment_id")
+  dendreoEnrolmentId   String?          @unique @map("dendreo_enrolment_id")
   dendreoSessionId     String?          @map("dendreo_session_id")
+  tmsOrigin            String?          @map("tms_origin")
   startDate            DateTime         @map("start_date")
   endDate              DateTime         @map("end_date")
   status               EnrollmentStatus @default(future)

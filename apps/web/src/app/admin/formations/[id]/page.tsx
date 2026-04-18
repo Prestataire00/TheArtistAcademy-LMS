@@ -8,6 +8,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/admin/ToastContext';
+import { Modal } from '@/components/Modal';
 
 interface UA { id: string; title: string; type: string; position: number; isPublished: boolean }
 interface Module { id: string; formationId: string; title: string; description: string | null; position: number; isPublished: boolean; uas: UA[] }
@@ -244,14 +245,16 @@ function ModuleSlideOver({ formationId, initial, onSave, onClose, onError }: {
     setSaving(false);
   }
 
+  const Wrapper = initial ? SlideOver : Modal;
+
   return (
-    <SlideOver title={initial ? 'Modifier le module' : 'Nouveau module'} onClose={onClose}
+    <Wrapper title={initial ? 'Modifier le module' : 'Nouveau module'} onClose={onClose}
       footer={<div className="flex gap-3"><button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button><button onClick={handleSubmit} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">{saving ? 'Enregistrement...' : 'Enregistrer'}</button></div>}>
       <div className="space-y-5">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" /></div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y" /></div>
         <div className="flex items-center gap-3"><Toggle checked={isPublished} onChange={() => setIsPublished(!isPublished)} /><span className="text-sm text-gray-700">{isPublished ? 'Publié' : 'Brouillon'}</span></div>
       </div>
-    </SlideOver>
+    </Wrapper>
   );
 }

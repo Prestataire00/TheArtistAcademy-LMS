@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
-import { SlideOver } from '@/components/SlideOver';
+import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/admin/ToastContext';
 
 interface StaffUser {
@@ -216,7 +216,7 @@ function CreateUserSlideOver({ onSave, onClose, onError }: {
   }
 
   return (
-    <SlideOver title="Nouvel utilisateur" onClose={onClose}
+    <Modal title="Nouvel utilisateur" onClose={onClose}
       footer={
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button>
@@ -247,6 +247,6 @@ function CreateUserSlideOver({ onSave, onClose, onError }: {
           </select>
         </div>
       </div>
-    </SlideOver>
+    </Modal>
   );
 }

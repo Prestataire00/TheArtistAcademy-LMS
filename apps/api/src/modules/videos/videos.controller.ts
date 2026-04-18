@@ -3,6 +3,7 @@ import { z } from 'zod';
 import * as service from './videos.service';
 import { logEvent } from '../../shared/eventLog.service';
 import { BadRequestError } from '../../shared/errors';
+import { sendProgressionToDendreo } from '../dendreo/dendreo.progression.service';
 
 // ─── Admin — Upload vidéo ─────────────────────────────────────────────────────
 
@@ -100,6 +101,9 @@ export async function playerSaveProgress(req: Request, res: Response) {
       },
     });
   }
+
+  // Envoyer la progression à Dendreo en arrière-plan
+  sendProgressionToDendreo(enrollment.id);
 
   res.json({ data: result });
 }

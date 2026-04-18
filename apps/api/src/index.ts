@@ -24,6 +24,7 @@ import { formateurRouter } from './modules/formateur/formateur.router';
 import { adminRouter } from './modules/admin/admin.router';
 import { adminUsersRouter } from './modules/admin/users.router';
 import { webhooksRouter } from './modules/webhooks/webhooks.router';
+import { dendreoRouter } from './modules/dendreo/dendreo.router';
 
 // Jobs
 import { startReminderScheduler } from './jobs/sendReminders.job';
@@ -33,7 +34,14 @@ const app = express();
 // ─── Middlewares globaux ───────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    // Conserver le body brut pour la vérification HMAC des webhooks Dendreo
+    if (req.url?.includes('/dendreo/webhooks')) {
+      req.rawBody = buf;
+    }
+  },
+}));
 app.use(cookieParser());
 // Force UTF-8 sur toutes les reponses JSON
 app.use((_req, res, next) => { res.setHeader('Content-Type', 'application/json; charset=utf-8'); next(); });
@@ -70,6 +78,7 @@ api.use('/admin/exports', exportsRouter);
 api.use('/admin/reminder-rules', remindersRouter);
 api.use('/admin', adminRouter);
 api.use('/webhooks', webhooksRouter);
+api.use('/dendreo', dendreoRouter);
 
 app.use('/api/v1', api);
 

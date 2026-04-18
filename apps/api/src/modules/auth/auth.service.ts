@@ -21,15 +21,19 @@ export interface DendreoJwtPayload {
 }
 
 /**
- * Valide le JWT signé par Dendreo (RS256).
+ * Valide le JWT signé par Dendreo (HS256 — secret partagé).
  * Vérifie la signature, l'expiration, et la protection replay via jti.
  */
 export async function validateDendreoToken(rawToken: string): Promise<DendreoJwtPayload> {
   let payload: DendreoJwtPayload;
 
+  if (!env.DENDREO_JWT_SECRET) {
+    throw new UnauthorizedError('Configuration SSO Dendreo manquante');
+  }
+
   try {
-    payload = jwt.verify(rawToken, env.DENDREO_JWT_PUBLIC_KEY, {
-      algorithms: [env.DENDREO_JWT_ALGORITHM as jwt.Algorithm],
+    payload = jwt.verify(rawToken, env.DENDREO_JWT_SECRET, {
+      algorithms: ['HS256'],
       clockTolerance: env.DENDREO_JWT_EXPIRY_TOLERANCE_SECONDS,
     }) as DendreoJwtPayload;
   } catch (err) {

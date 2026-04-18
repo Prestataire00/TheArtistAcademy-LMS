@@ -11,9 +11,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('8h'),
 
-  // SSO Dendreo (optionnel en dev — clé publique pas encore fournie)
-  DENDREO_JWT_PUBLIC_KEY: z.string().default(''),
-  DENDREO_JWT_ALGORITHM: z.string().default('RS256'),
+  // SSO Dendreo (HS256 — secret partagé)
+  DENDREO_JWT_SECRET: z.string().default(''),
   DENDREO_JWT_EXPIRY_TOLERANCE_SECONDS: z.coerce.number().default(30),
 
   // Supabase
@@ -34,8 +33,9 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
   // Webhooks Dendreo
-  DENDREO_WEBHOOK_URL: z.string().url().optional(),
-  DENDREO_WEBHOOK_SECRET: z.string().optional(),
+  DENDREO_WEBHOOK_SECRET: z.string().default(''),
+  DENDREO_API_KEY: z.string().default(''),
+  DENDREO_TENANT_ID: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
