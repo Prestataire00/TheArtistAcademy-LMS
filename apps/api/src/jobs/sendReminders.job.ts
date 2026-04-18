@@ -1,18 +1,16 @@
 import cron from 'node-cron';
 import { logger } from '../shared/logger';
+import { sendDailyReminders } from '../modules/reminders/reminders.service';
 
 /**
- * Job cron : envoi des relances email quotidiennes.
- * Lancé au démarrage du serveur.
- * Implémentation complète : Phase 3.
+ * Job cron : envoi des relances email quotidiennes à 9h00.
  */
 export function startReminderScheduler() {
-  // Tous les jours à 9h00
   cron.schedule('0 9 * * *', async () => {
     logger.info('Running daily reminder job...');
     try {
-      // TODO: Phase 3 — implémenter sendDailyReminders()
-      logger.info('Reminder job completed');
+      const summary = await sendDailyReminders();
+      logger.info('Reminder job completed', summary);
     } catch (err) {
       logger.error('Reminder job failed', { error: err });
     }

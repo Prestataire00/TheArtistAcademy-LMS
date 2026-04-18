@@ -1,3 +1,4 @@
+import { EventCategory } from '@prisma/client';
 import { prisma } from '../../config/database';
 
 /**
@@ -145,13 +146,17 @@ export async function getApprenants(formationId?: string) {
 }
 
 /**
- * Logs SSO (derniers 100).
+ * Logs SSO (derniers 50), filtrables par statut.
  */
-export async function getSsoLogs() {
+export async function getSsoLogs(status?: 'success' | 'failed') {
+  const where: any = { category: 'sso' };
+  if (status === 'success') where.action = 'sso_success';
+  if (status === 'failed') where.action = { not: 'sso_success' };
+
   const logs = await prisma.eventLog.findMany({
-    where: { category: 'sso' },
+    where,
     orderBy: { createdAt: 'desc' },
-    take: 100,
+    take: 50,
     include: { user: { select: { email: true, fullName: true } } },
   });
 
@@ -167,28 +172,59 @@ export async function getSsoLogs() {
 }
 
 /**
- * Journal des relances email.
+ * Statistiques SSO + état de connexion Dendreo.
+ * - lastWebhookAt : dernier webhook Dendreo reçu (peu importe l'event)
+ * - lastLearnerActivityAt : dernier évent apprenant (navigation, video, quiz, sso)
+ * - Nb sur 7 jours : sso success/failed, webhooks
  */
-export async function getReminderLogs() {
-  const logs = await prisma.reminderLog.findMany({
-    orderBy: { sentAt: 'desc' },
-    take: 200,
-    include: {
-      user: { select: { fullName: true, email: true } },
-      rule: { select: { delayDays: true, formation: { select: { title: true } } } },
-    },
-  });
+export async function getSsoStats() {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  return logs.map((l) => ({
-    id: l.id,
-    ruleName: l.rule.formation?.title
-      ? `${l.rule.formation.title} — ${l.rule.delayDays}j`
-      : `Global — ${l.rule.delayDays}j`,
-    recipientName: l.user.fullName,
-    recipientEmail: l.user.email,
-    templateId: l.templateId,
-    status: l.status,
-    errorMessage: l.errorMessage,
-    sentAt: l.sentAt.toISOString(),
-  }));
+  const learnerCategories: EventCategory[] = [
+    EventCategory.sso,
+    EventCategory.navigation,
+    EventCategory.video,
+    EventCategory.quiz,
+  ];
+
+  const [lastWebhook, lastLearner, ssoSuccess7d, ssoFailed7d, webhooks7d] = await Promise.all([
+    prisma.eventLog.findFirst({
+      where: { category: 'webhook' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, action: true },
+    }),
+    prisma.eventLog.findFirst({
+      where: { category: { in: learnerCategories } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, action: true },
+    }),
+    prisma.eventLog.count({
+      where: { category: 'sso', action: 'sso_success', createdAt: { gte: sevenDaysAgo } },
+    }),
+    prisma.eventLog.count({
+      where: { category: 'sso', action: { not: 'sso_success' }, createdAt: { gte: sevenDaysAgo } },
+    }),
+    prisma.eventLog.count({
+      where: { category: 'webhook', createdAt: { gte: sevenDaysAgo } },
+    }),
+  ]);
+
+  let status: 'connected' | 'inactive' | 'unconfigured';
+  if (!lastWebhook) status = 'unconfigured';
+  else if (lastWebhook.createdAt >= sevenDaysAgo) status = 'connected';
+  else status = 'inactive';
+
+  return {
+    status,
+    lastWebhookAt: lastWebhook?.createdAt.toISOString() ?? null,
+    lastWebhookAction: lastWebhook?.action ?? null,
+    lastLearnerActivityAt: lastLearner?.createdAt.toISOString() ?? null,
+    last7Days: {
+      ssoSuccess: ssoSuccess7d,
+      ssoFailed: ssoFailed7d,
+      webhooks: webhooks7d,
+    },
+  };
 }
+

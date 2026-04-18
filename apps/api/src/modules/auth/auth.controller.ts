@@ -13,11 +13,24 @@ export async function handleSso(req: Request, res: Response) {
 
   if (!rawToken) throw new BadRequestError('Token SSO manquant');
 
-  // 1. Valider le JWT Dendreo (HS256)
-  const dendreoPayload = await validateDendreoToken(rawToken);
-
-  // 2. Upsert User + Enrollment
-  const { user, enrollment } = await upsertUserAndEnrollment(dendreoPayload);
+  let dendreoPayload;
+  let upserted;
+  try {
+    // 1. Valider le JWT Dendreo (HS256)
+    dendreoPayload = await validateDendreoToken(rawToken);
+    // 2. Upsert User + Enrollment
+    upserted = await upsertUserAndEnrollment(dendreoPayload);
+  } catch (err: any) {
+    await logEvent({
+      category: 'sso',
+      action: 'sso_failed',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      payload: { error: err?.message ?? 'unknown', email: dendreoPayload?.email },
+    });
+    throw err;
+  }
+  const { user, enrollment } = upserted;
 
   // 3. Logger l'événement SSO
   await logEvent({

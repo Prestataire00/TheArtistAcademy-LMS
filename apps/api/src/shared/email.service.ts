@@ -29,7 +29,45 @@ export async function sendEmail(params: SendEmailParams): Promise<{ messageId: s
   return { messageId: response.data.messageId };
 }
 
-// ─── Password reset email (HTML direct, sans template Brevo) ─────────────────
+// ─── Envoi HTML direct via Brevo ─────────────────────────────────────────────
+
+interface SendHtmlEmailParams {
+  to: { email: string; name?: string };
+  subject: string;
+  html: string;
+}
+
+/**
+ * Envoi d'un email HTML direct (sans template Brevo).
+ * Throw en cas d'erreur : l'appelant gère le fallback / logging.
+ */
+export async function sendHtmlEmail(params: SendHtmlEmailParams): Promise<void> {
+  if (!env.BREVO_API_KEY) {
+    logger.warn('BREVO_API_KEY not set — HTML email skipped', { to: params.to.email, subject: params.subject });
+    return;
+  }
+
+  await axios.post(
+    'https://api.brevo.com/v3/smtp/email',
+    {
+      sender: { email: env.EMAIL_FROM_ADDRESS, name: env.EMAIL_FROM_NAME },
+      to: [params.to],
+      subject: params.subject,
+      htmlContent: params.html,
+    },
+    {
+      headers: {
+        'api-key': env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15_000,
+    },
+  );
+
+  logger.debug('HTML email sent', { to: params.to.email, subject: params.subject });
+}
+
+// ─── Password reset email ────────────────────────────────────────────────────
 
 interface PasswordResetEmailParams {
   to: { email: string; name?: string };
@@ -38,11 +76,6 @@ interface PasswordResetEmailParams {
 }
 
 export async function sendPasswordResetEmail(params: PasswordResetEmailParams): Promise<void> {
-  if (!env.BREVO_API_KEY) {
-    logger.warn('BREVO_API_KEY not set — password reset email logged instead', { resetUrl: params.resetUrl, to: params.to.email });
-    return;
-  }
-
   const html = `
     <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
       <p style="font-size: 15px; color: #111827;">Bonjour ${params.fullName},</p>
@@ -55,21 +88,9 @@ export async function sendPasswordResetEmail(params: PasswordResetEmailParams): 
     </div>
   `.trim();
 
-  await axios.post(
-    'https://api.brevo.com/v3/smtp/email',
-    {
-      sender: { email: env.EMAIL_FROM_ADDRESS, name: env.EMAIL_FROM_NAME },
-      to: [params.to],
-      subject: 'Reinitialisation de votre mot de passe — The Artist Academy',
-      htmlContent: html,
-    },
-    {
-      headers: {
-        'api-key': env.BREVO_API_KEY,
-        'Content-Type': 'application/json',
-      },
-    },
-  );
-
-  logger.debug('Password reset email sent', { to: params.to.email });
+  await sendHtmlEmail({
+    to: params.to,
+    subject: 'Reinitialisation de votre mot de passe — The Artist Academy',
+    html,
+  });
 }

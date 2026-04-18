@@ -22,10 +22,11 @@ const envSchema = z.object({
   SUPABASE_RESOURCES_BUCKET: z.string().default('resources'),
   SUPABASE_SIGNED_URL_EXPIRES_IN: z.coerce.number().default(7200), // 2h en secondes
 
-  // Email (optionnel en dev)
+  // Email (Brevo — optionnel en dev)
   BREVO_API_KEY: z.string().default(''),
-  EMAIL_FROM_ADDRESS: z.string().default('dev@localhost'),
+  EMAIL_FROM_ADDRESS: z.string().default('noreply@the-artist-academy.fr'),
   EMAIL_FROM_NAME: z.string().default('The Artist Academy'),
+  REMINDER_DELAY_DAYS: z.coerce.number().default(7),
 
   // URLs
   API_URL: z.string().url().default('http://localhost:3001'),

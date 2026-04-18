@@ -28,15 +28,16 @@ adminRouter.get('/dashboard/sessions', asyncHandler(async (req: Request, res: Re
   res.json({ data });
 }));
 
-// GET /api/v1/admin/sso/logs
-adminRouter.get('/sso/logs', asyncHandler(async (_req: Request, res: Response) => {
-  const data = await service.getSsoLogs();
+// GET /api/v1/admin/sso/logs?status=success|failed
+adminRouter.get('/sso/logs', asyncHandler(async (req: Request, res: Response) => {
+  const status = req.query.status as 'success' | 'failed' | undefined;
+  const data = await service.getSsoLogs(status);
   res.json({ data });
 }));
 
-// GET /api/v1/admin/relances
-adminRouter.get('/relances', asyncHandler(async (_req: Request, res: Response) => {
-  const data = await service.getReminderLogs();
+// GET /api/v1/admin/sso/stats
+adminRouter.get('/sso/stats', asyncHandler(async (_req: Request, res: Response) => {
+  const data = await service.getSsoStats();
   res.json({ data });
 }));
 

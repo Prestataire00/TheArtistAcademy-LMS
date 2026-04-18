@@ -1,25 +1,31 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
+import { asyncHandler } from '../../shared/errors';
+import { logEvent } from '../../shared/eventLog.service';
+import * as service from './reminders.service';
 
 export const remindersRouter = Router();
+remindersRouter.use(authenticate, requireRole('admin'));
 
-remindersRouter.get('/', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 3 — liste règles relances' });
-});
+// GET /api/v1/admin/relances — journal filtrable
+remindersRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
+  const { status, formationId } = req.query as Record<string, string | undefined>;
+  const data = await service.listReminderLogs({ status, formationId });
+  res.json({ data });
+}));
 
-remindersRouter.post('/', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 3 — créer règle relance' });
-});
-
-remindersRouter.put('/:id', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 3 — modifier règle relance' });
-});
-
-remindersRouter.delete('/:id', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 3 — désactiver règle relance' });
-});
-
-remindersRouter.get('/logs', authenticate, requireRole('admin'), (_req, res) => {
-  res.json({ message: 'TODO: Phase 3 — journal relances' });
-});
+// GET /api/v1/admin/relances/test/:enrollmentId — envoi manuel de test
+remindersRouter.get('/test/:enrollmentId', asyncHandler(async (req: Request, res: Response) => {
+  const { enrollmentId } = req.params;
+  const result = await service.sendTestReminder(enrollmentId);
+  await logEvent({
+    category: 'admin',
+    action: 'reminder_test',
+    userId: req.user!.userId,
+    enrollmentId,
+    payload: { status: result.status },
+    ipAddress: req.ip,
+  });
+  res.json({ data: result });
+}));

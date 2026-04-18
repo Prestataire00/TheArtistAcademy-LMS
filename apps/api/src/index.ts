@@ -75,7 +75,7 @@ api.use('/formateur', formateurRouter);
 // Admin — autres
 api.use('/admin/utilisateurs', adminUsersRouter);
 api.use('/admin/exports', exportsRouter);
-api.use('/admin/reminder-rules', remindersRouter);
+api.use('/admin/relances', remindersRouter);
 api.use('/admin', adminRouter);
 api.use('/webhooks', webhooksRouter);
 api.use('/dendreo', dendreoRouter);
