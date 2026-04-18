@@ -437,16 +437,41 @@ function TemplateEditor({ template, onClose, onSaved }: { template: Template | n
   const [name, setName] = useState(template?.name ?? '');
   const [subject, setSubject] = useState(template?.subject ?? '');
   const [htmlContent, setHtmlContent] = useState(template?.htmlContent ?? '');
+  const [editorMode, setEditorMode] = useState<'visual' | 'html'>('visual');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const subjectRef = useRef<HTMLInputElement>(null);
   const quillRef = useRef<ReactQuillType | null>(null);
+  const htmlRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
 
   const nameInvalid = !template && name.length > 0 && !NAME_PATTERN.test(name);
   const canSubmit = subject && htmlContent && (template || (name && !nameInvalid));
 
   const previewHtml = useMemo(() => renderPreview(htmlContent), [htmlContent]);
+
+  // Highlight {{var}} pour le mode HTML brut
+  const highlightedSource = useMemo(() => {
+    const escaped = htmlContent
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const withVars = escaped.replace(
+      /\{\{[a-z0-9_]+\}\}/g,
+      (m) => `<span class="var-hl">${m}</span>`,
+    );
+    // Ajoute un espace insécable en fin pour que la dernière ligne vide reste visible
+    return withVars + '\u200B';
+  }, [htmlContent]);
+
+  function syncHighlightScroll() {
+    const ta = htmlRef.current;
+    const hl = highlightRef.current;
+    if (!ta || !hl) return;
+    hl.scrollTop = ta.scrollTop;
+    hl.scrollLeft = ta.scrollLeft;
+  }
 
   async function submit() {
     setErr(null);
@@ -489,6 +514,19 @@ function TemplateEditor({ template, onClose, onSaved }: { template: Template | n
     const pos = range?.index ?? editor.getLength();
     editor.insertText(pos, v, 'user');
     editor.setSelection(pos + v.length, 0);
+  }
+
+  function insertIntoHtmlTextarea(v: string) {
+    const el = htmlRef.current;
+    if (!el) { setHtmlContent((s) => s + v); return; }
+    const start = el.selectionStart ?? htmlContent.length;
+    const end = el.selectionEnd ?? htmlContent.length;
+    setHtmlContent(htmlContent.slice(0, start) + v + htmlContent.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + v.length;
+      el.setSelectionRange(pos, pos);
+    });
   }
 
   return (
@@ -546,18 +584,61 @@ function TemplateEditor({ template, onClose, onSaved }: { template: Template | n
         </div>
 
         <div>
-          <p className="text-xs text-gray-500 mb-1">Contenu</p>
-          <div className="quill-taa rounded-lg border border-gray-200 overflow-hidden">
-            <ReactQuill
-              ref={quillRef}
-              theme="snow"
-              value={htmlContent}
-              onChange={setHtmlContent}
-              modules={QUILL_MODULES}
-              formats={QUILL_FORMATS}
-            />
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">Contenu</p>
+            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setEditorMode('visual')}
+                className={`px-3 py-1 rounded-md transition-colors ${editorMode === 'visual' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Visuel
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditorMode('html')}
+                className={`px-3 py-1 rounded-md transition-colors ${editorMode === 'html' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                HTML
+              </button>
+            </div>
           </div>
-          <VariableChips onInsert={insertIntoQuill} />
+
+          {editorMode === 'visual' ? (
+            <>
+              <div className="quill-taa rounded-lg border border-gray-200 overflow-hidden">
+                <ReactQuill
+                  ref={quillRef}
+                  theme="snow"
+                  value={htmlContent}
+                  onChange={setHtmlContent}
+                  modules={QUILL_MODULES}
+                  formats={QUILL_FORMATS}
+                />
+              </div>
+              <VariableChips onInsert={insertIntoQuill} />
+            </>
+          ) : (
+            <>
+              <div className="html-editor relative border border-gray-200 rounded-lg overflow-hidden" style={{ height: 300 }}>
+                <div
+                  ref={highlightRef}
+                  aria-hidden="true"
+                  className="html-editor-hl"
+                  dangerouslySetInnerHTML={{ __html: highlightedSource }}
+                />
+                <textarea
+                  ref={htmlRef}
+                  value={htmlContent}
+                  onChange={(e) => setHtmlContent(e.target.value)}
+                  onScroll={syncHighlightScroll}
+                  spellCheck={false}
+                  className="html-editor-ta"
+                />
+              </div>
+              <VariableChips onInsert={insertIntoHtmlTextarea} />
+            </>
+          )}
         </div>
 
         <div>
@@ -581,6 +662,47 @@ function TemplateEditor({ template, onClose, onSaved }: { template: Template | n
         .preview-pane em { font-style: italic; }
         .preview-pane u { text-decoration: underline; }
         .preview-pane a { color: #B5294E; text-decoration: underline; }
+
+        /* ─── HTML editor avec highlight des variables {{...}} ─── */
+        .html-editor { background: #fff; }
+        .html-editor-hl,
+        .html-editor-ta {
+          position: absolute;
+          inset: 0;
+          margin: 0;
+          padding: 10px 12px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 12px;
+          line-height: 1.55;
+          white-space: pre-wrap;
+          word-break: break-word;
+          overflow-wrap: break-word;
+          overflow: auto;
+          tab-size: 2;
+          border: 0;
+        }
+        .html-editor-hl {
+          pointer-events: none;
+          color: #1f2937;
+          background: transparent;
+          z-index: 1;
+        }
+        .html-editor-hl .var-hl {
+          background: #FFE4EC;
+          color: #B5294E;
+          font-weight: 700;
+          border-radius: 3px;
+          padding: 0 2px;
+        }
+        .html-editor-ta {
+          z-index: 2;
+          background: transparent;
+          color: transparent;
+          caret-color: #111827;
+          resize: none;
+          outline: none;
+        }
+        .html-editor-ta::selection { background: rgba(181, 41, 78, 0.25); }
       `}</style>
     </SlideOver>
   );
