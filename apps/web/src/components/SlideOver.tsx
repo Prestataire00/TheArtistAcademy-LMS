@@ -7,13 +7,14 @@ interface SlideOverProps {
   onClose: () => void;
   footer?: ReactNode;
   children: ReactNode;
+  maxWidth?: number;
 }
 
-export function SlideOver({ title, onClose, footer, children }: SlideOverProps) {
+export function SlideOver({ title, onClose, footer, children, maxWidth = 520 }: SlideOverProps) {
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-40 animate-[fadeIn_200ms_ease-out]" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 z-50 w-full bg-white shadow-xl flex flex-col animate-[slideInRight_200ms_ease-out]" style={{ maxWidth: 520 }}>
+      <div className="fixed inset-y-0 right-0 z-50 w-full bg-white shadow-xl flex flex-col animate-[slideInRight_200ms_ease-out]" style={{ maxWidth }}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">

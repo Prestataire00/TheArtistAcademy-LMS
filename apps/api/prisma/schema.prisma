@@ -163,7 +163,6 @@ model Formation {
   trainer                   User?       @relation("TrainerFormations", fields: [trainerId], references: [id])
   modules                   Module[]
   enrollments               Enrollment[]
-  reminderRules             ReminderRule[]
 
   @@index([trainerId])
   @@map("formations")
@@ -402,21 +401,37 @@ model EventLog {
 // ─── RELANCES EMAIL ───────────────────────────────────────────────────────────
 
 model ReminderRule {
-  id                   String   @id @default(cuid())
-  formationId          String?  @map("formation_id")
-  delayDays            Int      @map("delay_days")
-  sendWindowStartHour  Int      @default(8) @map("send_window_start_hour")
-  sendWindowEndHour    Int      @default(20) @map("send_window_end_hour")
-  templateId           String   @map("template_id")
-  isActive             Boolean  @default(true) @map("is_active")
-  createdBy            String   @map("created_by")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  name               String
+  delayDays          Int      @map("delay_days")
+  sendHour           Int      @default(9) @map("send_hour")
+  templateName       String   @map("template_name")
+  isActive           Boolean  @default(true) @map("is_active")
+  excludeCompleted   Boolean  @default(true) @map("exclude_completed")
+  excludeExpired     Boolean  @default(true) @map("exclude_expired")
+  excludeUnenrolled  Boolean  @default(true) @map("exclude_unenrolled")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
-  formation    Formation?    @relation(fields: [formationId], references: [id], onDelete: SetNull)
   reminderLogs ReminderLog[]
 
+  @@index([templateName])
   @@map("reminder_rules")
+}
+
+model ReminderTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  version     Int
+  subject     String
+  htmlContent String   @map("html_content") @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([name, version])
+  @@index([name, isActive])
+  @@map("reminder_templates")
 }
 
 model ReminderLog {

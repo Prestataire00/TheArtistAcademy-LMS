@@ -219,17 +219,17 @@ export async function exportReminders() {
     include: {
       user: { select: { fullName: true, email: true } },
       enrollment: { select: { formation: { select: { title: true } } } },
-      rule: { select: { delayDays: true, formation: { select: { title: true } } } },
+      rule: { select: { name: true, delayDays: true, templateName: true } },
     },
   });
 
   const rows = logs.map((l) => ({
     Date: l.sentAt.toISOString(),
     Formation: l.enrollment.formation.title,
-    Regle: l.rule.formation?.title ? `${l.rule.formation.title} — ${l.rule.delayDays}j` : `Global — ${l.rule.delayDays}j`,
+    Regle: `${l.rule.name} (${l.rule.delayDays}j)`,
     Destinataire: l.user.fullName,
     Email: l.user.email,
-    Template: l.templateId,
+    Template: `${l.rule.templateName}${l.templateVersion ? ` v${l.templateVersion}` : ''}`,
     Statut: l.status,
     Erreur: l.errorMessage ?? '',
   }));
