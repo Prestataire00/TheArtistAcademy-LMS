@@ -9,6 +9,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } 
 import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/admin/ToastContext';
 import { Modal } from '@/components/Modal';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 interface UA { id: string; title: string; type: string; position: number; isPublished: boolean }
 interface Module { id: string; formationId: string; title: string; description: string | null; position: number; isPublished: boolean; uas: UA[] }
@@ -20,6 +21,7 @@ interface FormationDetail {
 export default function AdminFormationDetailPage() {
   const params = useParams<{ id: string }>();
   const formationId = params.id;
+  const isDesktop = useIsDesktop();
 
   const [formation, setFormation] = useState<FormationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,10 +91,10 @@ export default function AdminFormationDetailPage() {
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
           Formations
         </a>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{formation.title}</h1>
-            <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900 break-words">{formation.title}</h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-500">
               <span className={`px-2 py-0.5 rounded-full text-xs ${formation.pathwayMode === 'linear' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
                 {formation.pathwayMode === 'linear' ? 'Linéaire' : 'Libre'}
               </span>
@@ -102,7 +104,7 @@ export default function AdminFormationDetailPage() {
           </div>
           <button
             onClick={() => { setEditingModule(null); setShowModuleForm(true); }}
-            className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors font-medium"
+            className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 transition-colors font-medium flex-shrink-0"
           >
             + Ajouter un module
           </button>
@@ -128,30 +130,44 @@ export default function AdminFormationDetailPage() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={formation.modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="w-10 px-2 py-3" />
-                    <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 300, maxWidth: 300 }}>Module</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">UAs</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publié</th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {formation.modules.map((mod) => (
-                    <SortableModuleRow key={mod.id} mod={mod} formationId={formationId}
-                      onEdit={() => { setEditingModule(mod); setShowModuleForm(true); }}
-                      onDuplicate={() => handleDuplicateModule(mod.id)}
-                      onDelete={() => handleDeleteModule(mod.id, mod.title)}
-                      onTogglePublish={async () => { try { await api.put(`/admin/modules/${mod.id}`, { isPublished: !mod.isPublished }); loadData(); } catch {} }}
-                      onUpdate={loadData}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {isDesktop ? (
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="w-10 px-2 py-3" />
+                      <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 300, maxWidth: 300 }}>Module</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">UAs</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-500">Publié</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {formation.modules.map((mod) => (
+                      <SortableModuleRow key={mod.id} mod={mod} formationId={formationId} asCard={false}
+                        onEdit={() => { setEditingModule(mod); setShowModuleForm(true); }}
+                        onDuplicate={() => handleDuplicateModule(mod.id)}
+                        onDelete={() => handleDeleteModule(mod.id, mod.title)}
+                        onTogglePublish={async () => { try { await api.put(`/admin/modules/${mod.id}`, { isPublished: !mod.isPublished }); loadData(); } catch {} }}
+                        onUpdate={loadData}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <ul className="space-y-3">
+                {formation.modules.map((mod) => (
+                  <SortableModuleRow key={mod.id} mod={mod} formationId={formationId} asCard={true}
+                    onEdit={() => { setEditingModule(mod); setShowModuleForm(true); }}
+                    onDuplicate={() => handleDuplicateModule(mod.id)}
+                    onDelete={() => handleDeleteModule(mod.id, mod.title)}
+                    onTogglePublish={async () => { try { await api.put(`/admin/modules/${mod.id}`, { isPublished: !mod.isPublished }); loadData(); } catch {} }}
+                    onUpdate={loadData}
+                  />
+                ))}
+              </ul>
+            )}
           </SortableContext>
         </DndContext>
       )}
@@ -161,8 +177,8 @@ export default function AdminFormationDetailPage() {
 
 // ─── Sortable module row ─────────────────────────────────────────────────────
 
-function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, onTogglePublish, onUpdate }: {
-  mod: Module; formationId: string;
+function SortableModuleRow({ mod, formationId, asCard, onEdit, onDuplicate, onDelete, onTogglePublish, onUpdate }: {
+  mod: Module; formationId: string; asCard: boolean;
   onEdit: () => void; onDuplicate: () => void; onDelete: () => void; onTogglePublish: () => void; onUpdate: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: mod.id });
@@ -177,29 +193,68 @@ function SortableModuleRow({ mod, formationId, onEdit, onDuplicate, onDelete, on
     catch { setEditing(false); setEditTitle(mod.title); }
   }
 
+  const dragHandle = (
+    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none flex items-center justify-center" title="Glisser pour réordonner" aria-label="Glisser pour réordonner">
+      <span className="text-lg leading-none select-none">&#10303;</span>
+    </button>
+  );
+
+  const titleEl = editing ? (
+    <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditing(false); setEditTitle(mod.title); } }}
+      onBlur={saveTitle} autoFocus
+      className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full box-border" />
+  ) : (
+    <p onClick={() => { setEditTitle(mod.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300 break-words">{mod.title}</p>
+  );
+
+  if (asCard) {
+    return (
+      <li ref={setNodeRef} style={style} className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <div className="pt-0.5">{dragHandle}</div>
+            <div className="min-w-0 flex-1">{titleEl}</div>
+          </div>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 whitespace-nowrap flex-shrink-0">
+            #{mod.position + 1}
+          </span>
+        </div>
+
+        <div className="text-sm">
+          <div className="text-[11px] text-gray-400 mb-0.5">UAs</div>
+          <div className="text-gray-700">{mod.uas.length}</div>
+        </div>
+
+        <div className="text-sm flex items-center gap-2">
+          <span className="text-[11px] text-gray-400">Publié</span>
+          <Toggle checked={mod.isPublished} onChange={onTogglePublish} />
+        </div>
+
+        <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-gray-100">
+          <a href={`/admin/formations/${formationId}/modules/${mod.id}`} className="text-xs text-brand-600 hover:text-brand-700 px-2 py-1 font-medium">Gérer les UAs</a>
+          <button onClick={onEdit} className="text-xs text-brand-600 hover:text-brand-700 px-2 py-1">Éditer</button>
+          <button onClick={onDuplicate} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1">Dupliquer</button>
+          <button onClick={onDelete} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">Supprimer</button>
+        </div>
+      </li>
+    );
+  }
+
   return (
     <tr ref={setNodeRef} style={style} className="hover:bg-gray-50">
-      <td className="w-10 px-2 py-3 text-center">
-        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none" title="Glisser pour réordonner">
-          <span className="text-lg leading-none">&#10303;</span>
-        </button>
-      </td>
+      <td className="w-10 px-2 py-3 text-center">{dragHandle}</td>
       <td className="px-4 py-3" style={{ width: 300, maxWidth: 300 }}>
-        {editing ? (
-          <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditing(false); setEditTitle(mod.title); } }}
-            onBlur={saveTitle} autoFocus
-            className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full box-border" />
-        ) : (
+        {editing ? titleEl : (
           <p onClick={() => { setEditTitle(mod.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300 truncate">{mod.title}</p>
         )}
       </td>
-      <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{mod.uas.length}</td>
-      <td className="px-4 py-3 hidden md:table-cell text-center">
+      <td className="px-4 py-3 text-gray-500">{mod.uas.length}</td>
+      <td className="px-4 py-3 text-center">
         <Toggle checked={mod.isPublished} onChange={onTogglePublish} />
       </td>
       <td className="px-4 py-3 text-right">
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
           <a href={`/admin/formations/${formationId}/modules/${mod.id}`} className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded font-medium">Gérer les UAs</a>
           <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Modifier">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

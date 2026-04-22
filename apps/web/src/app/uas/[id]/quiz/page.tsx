@@ -226,13 +226,13 @@ export default function QuizPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleRetry}
-              className="flex-1 px-4 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium text-sm"
+              className="flex-1 px-4 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium text-sm min-h-[44px]"
             >
               Recommencer
             </button>
             <a
               href={`/formations/${ua.formationId}`}
-              className="flex-1 px-4 py-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm text-center"
+              className="flex-1 inline-flex items-center justify-center px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm min-h-[44px]"
             >
               Retour à la formation
             </a>
@@ -272,7 +272,7 @@ export default function QuizPage() {
                   {q.choices.map((c) => (
                     <label
                       key={c.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors min-h-[44px] ${
                         answers[q.id] === c.id
                           ? 'border-brand-500 bg-brand-50'
                           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
@@ -284,7 +284,7 @@ export default function QuizPage() {
                         value={c.id}
                         checked={answers[q.id] === c.id}
                         onChange={() => setAnswer(q.id, c.id)}
-                        className="w-4 h-4 text-brand-600 focus:ring-brand-500"
+                        className="w-5 h-5 text-brand-600 focus:ring-brand-500 flex-shrink-0"
                       />
                       <span className="text-sm text-gray-700">{c.text}</span>
                     </label>
@@ -299,7 +299,7 @@ export default function QuizPage() {
                       key={c.id}
                       type="button"
                       onClick={() => setAnswer(q.id, c.id)}
-                      className={`flex-1 py-2.5 px-4 rounded-lg border font-medium text-sm transition-colors ${
+                      className={`flex-1 py-3 px-4 rounded-lg border font-medium text-sm transition-colors min-h-[44px] ${
                         answers[q.id] === c.id
                           ? 'border-brand-500 bg-brand-50 text-brand-700'
                           : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
@@ -328,7 +328,7 @@ export default function QuizPage() {
         <button
           onClick={handleSubmit}
           disabled={submitting || !allAnswered}
-          className="w-full py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px]"
         >
           {submitting ? 'Envoi en cours...' : 'Soumettre mes réponses'}
         </button>
@@ -351,12 +351,12 @@ export default function QuizPage() {
 function Header({ ua }: { ua: UAMeta }) {
   return (
     <header className="bg-white border-b border-gray-200">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 sm:gap-4">
         <a
           href={`/formations/${ua.formationId}`}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-brand-700 transition-colors flex-shrink-0"
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-brand-700 transition-colors flex-shrink-0 py-2 -my-2 min-h-[44px]"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
           </svg>
           <span className="hidden sm:inline">{ua.formationTitle}</span>
@@ -375,7 +375,7 @@ function AttemptsHistory({ attempts }: { attempts: Attempt[] }) {
   return (
     <div className="mt-10">
       <h3 className="text-sm font-semibold text-gray-900 mb-3">Historique des tentatives</h3>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50">

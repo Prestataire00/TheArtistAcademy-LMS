@@ -9,6 +9,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/admin/ToastContext';
 import { Modal } from '@/components/Modal';
 import { SlideOver } from '@/components/SlideOver';
+import { useIsDesktop } from '@/lib/useIsDesktop';
 
 interface ResourceInfo { id: string; fileName: string; fileType: string; fileSizeBytes: number | null }
 interface VideoInfo { id: string; originalName: string; durationSeconds: number | null }
@@ -21,6 +22,7 @@ interface QuizData { id: string; questions: Question[] }
 export default function AdminModuleDetailPage() {
   const params = useParams<{ id: string; moduleId: string }>();
   const { id: formationId, moduleId } = params;
+  const isDesktop = useIsDesktop();
 
   const [mod, setMod] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,12 +149,12 @@ export default function AdminModuleDetailPage() {
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
         Retour à la formation
       </a>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{mod.title}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 break-words">{mod.title}</h1>
           <p className="text-sm text-gray-500">Module {mod.position + 1} — {mod.uas.length} UA{mod.uas.length > 1 ? 's' : ''}</p>
         </div>
-        <button onClick={() => { setEditingUA(null); setShowUAForm(true); }} className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 font-medium">
+        <button onClick={() => { setEditingUA(null); setShowUAForm(true); }} className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 font-medium flex-shrink-0">
           + Ajouter une UA
         </button>
       </div>
@@ -252,34 +254,53 @@ export default function AdminModuleDetailPage() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={mod.uas.map((ua) => ua.id)} strategy={verticalListSortingStrategy}>
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="w-10 px-2 py-3" />
-                    <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 280, maxWidth: 280 }}>UA</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Type</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Fichier</th>
-                    <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publié</th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {mod.uas.map((ua) => (
-                    <SortableUARow
-                      key={ua.id}
-                      ua={ua}
-                      uploadingId={uploadingId}
-                      onOpenQuiz={() => openQuizEditor(ua.id)}
-                      onUpload={(type, file) => handleUpload(ua.id, type, file)}
-                      onDelete={() => handleDeleteUA(ua.id, ua.title)}
-                      onUpdate={() => { loadData(); }}
-                      onFlash={showToast}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {isDesktop ? (
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="w-10 px-2 py-3" />
+                      <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 280, maxWidth: 280 }}>UA</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">Type</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">Fichier</th>
+                      <th className="px-4 py-3 text-center font-medium text-gray-500">Publié</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {mod.uas.map((ua) => (
+                      <SortableUARow
+                        key={ua.id}
+                        ua={ua}
+                        asCard={false}
+                        uploadingId={uploadingId}
+                        onOpenQuiz={() => openQuizEditor(ua.id)}
+                        onUpload={(type, file) => handleUpload(ua.id, type, file)}
+                        onDelete={() => handleDeleteUA(ua.id, ua.title)}
+                        onUpdate={() => { loadData(); }}
+                        onFlash={showToast}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <ul className="space-y-3">
+                {mod.uas.map((ua) => (
+                  <SortableUARow
+                    key={ua.id}
+                    ua={ua}
+                    asCard={true}
+                    uploadingId={uploadingId}
+                    onOpenQuiz={() => openQuizEditor(ua.id)}
+                    onUpload={(type, file) => handleUpload(ua.id, type, file)}
+                    onDelete={() => handleDeleteUA(ua.id, ua.title)}
+                    onUpdate={() => { loadData(); }}
+                    onFlash={showToast}
+                  />
+                ))}
+              </ul>
+            )}
           </SortableContext>
         </DndContext>
       )}
@@ -290,11 +311,11 @@ export default function AdminModuleDetailPage() {
 // ─── Sortable UA row ─────────────────────────────────────────────────────────
 
 function SortableUARow(props: {
-  ua: UA; uploadingId: string | null; onOpenQuiz: () => void;
+  ua: UA; asCard: boolean; uploadingId: string | null; onOpenQuiz: () => void;
   onUpload: (type: 'video' | 'resource', file: File) => void;
   onDelete: () => void; onUpdate: () => void; onFlash: (message: string, type?: 'success' | 'error' | 'info') => void;
 }) {
-  const { ua, uploadingId, onOpenQuiz, onUpload, onDelete, onUpdate, onFlash } = props;
+  const { ua, asCard, uploadingId, onOpenQuiz, onUpload, onDelete, onUpdate, onFlash } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ua.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
@@ -312,16 +333,102 @@ function SortableUARow(props: {
     catch (err: unknown) { onFlash(err instanceof Error ? err.message : 'Erreur', 'error'); }
   }
 
-  const typeLabels: Record<string, string> = { video: 'Video', quiz: 'Quiz', resource: 'Ressource' };
+  const typeLabels: Record<string, string> = { video: 'Vidéo', quiz: 'Quiz', resource: 'Ressource' };
   const fileName = ua.resource?.fileName || ua.videoContent?.originalName || '—';
+
+  const dragHandle = (
+    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none flex items-center justify-center" title="Glisser pour réordonner" aria-label="Glisser pour réordonner">
+      <span className="text-lg leading-none select-none">&#10303;</span>
+    </button>
+  );
+
+  const typeBadge = (
+    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
+      ua.type === 'video' ? 'bg-purple-50 text-purple-600' :
+      ua.type === 'quiz' ? 'bg-blue-50 text-blue-600' :
+      'bg-red-50 text-red-600'
+    }`}>
+      {typeLabels[ua.type] || ua.type}
+    </span>
+  );
+
+  const typeActions = (
+    <>
+      {ua.type === 'quiz' && <button onClick={onOpenQuiz} className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded">Éditer quiz</button>}
+      {ua.type === 'resource' && (
+        <>
+          {ua.resource && (
+            <>
+              <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/resources/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
+              <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string;fileName:string}}>(`/admin/resources/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=r.data.fileName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Télécharger</button>
+            </>
+          )}
+          <label className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded cursor-pointer">
+            {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" /> : (ua.resource ? 'Remplacer' : 'Uploader')}
+            <input type="file" accept=".pdf,.ppt,.pptx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('resource', f); e.target.value = ''; }} />
+          </label>
+        </>
+      )}
+      {ua.type === 'video' && (
+        <>
+          {ua.videoContent && (
+            <>
+              <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
+              <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=ua.videoContent!.originalName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Télécharger</button>
+            </>
+          )}
+          <label className="px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded cursor-pointer">
+            {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" /> : (ua.videoContent ? 'Remplacer' : 'Uploader')}
+            <input type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('video', f); e.target.value = ''; }} />
+          </label>
+        </>
+      )}
+      <button onClick={onDelete} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded">Supprimer</button>
+    </>
+  );
+
+  if (asCard) {
+    return (
+      <li ref={setNodeRef} style={style} className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <div className="pt-0.5">{dragHandle}</div>
+            <div className="min-w-0 flex-1">
+              {editing ? (
+                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setEditing(false); setEditTitle(ua.title); } }}
+                  onBlur={saveTitle} autoFocus
+                  className="px-2 py-1 border border-brand-300 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 w-full box-border" />
+              ) : (
+                <p onClick={() => { setEditTitle(ua.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300 break-words">{ua.title}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex-shrink-0">{typeBadge}</div>
+        </div>
+
+        {fileName !== '—' && (
+          <div className="text-sm">
+            <div className="text-[11px] text-gray-400 mb-0.5">Fichier</div>
+            <div className="text-gray-700 text-xs break-all">{fileName}</div>
+          </div>
+        )}
+
+        <div className="text-sm flex items-center gap-2">
+          <span className="text-[11px] text-gray-400">Publié</span>
+          <Toggle checked={ua.isPublished} onChange={handleTogglePublish} />
+        </div>
+
+        <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-gray-100">
+          {typeActions}
+        </div>
+      </li>
+    );
+  }
 
   return (
     <tr ref={setNodeRef} style={style} className="hover:bg-gray-50">
-      <td className="w-10 px-2 py-3 text-center">
-        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none" title="Glisser pour réordonner">
-          <span className="text-lg leading-none">&#10303;</span>
-        </button>
-      </td>
+      <td className="w-10 px-2 py-3 text-center">{dragHandle}</td>
       <td className="px-4 py-3" style={{ width: 280, maxWidth: 280 }}>
         {editing ? (
           <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
@@ -332,43 +439,12 @@ function SortableUARow(props: {
           <p onClick={() => { setEditTitle(ua.title); setEditing(true); }} className="font-medium text-gray-900 cursor-pointer hover:underline hover:decoration-gray-300 truncate">{ua.title}</p>
         )}
       </td>
-      <td className="px-4 py-3 hidden sm:table-cell">
-        <span className={`text-xs px-2 py-0.5 rounded-full ${ua.type === 'video' ? 'bg-purple-50 text-purple-600' : ua.type === 'quiz' ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>{typeLabels[ua.type] || ua.type}</span>
-      </td>
-      <td className="px-4 py-3 text-gray-500 text-xs truncate max-w-[150px] hidden md:table-cell">{fileName}</td>
-      <td className="px-4 py-3 hidden md:table-cell text-center"><Toggle checked={ua.isPublished} onChange={handleTogglePublish} /></td>
+      <td className="px-4 py-3">{typeBadge}</td>
+      <td className="px-4 py-3 text-gray-500 text-xs truncate max-w-[150px]">{fileName}</td>
+      <td className="px-4 py-3 text-center"><Toggle checked={ua.isPublished} onChange={handleTogglePublish} /></td>
       <td className="px-4 py-3 text-right">
-        <div className="flex items-center justify-end gap-1">
-          {ua.type === 'quiz' && <button onClick={onOpenQuiz} className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded">Éditer quiz</button>}
-          {ua.type === 'resource' && (
-            <>
-              {ua.resource && (
-                <>
-                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/resources/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
-                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string;fileName:string}}>(`/admin/resources/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=r.data.fileName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Télécharger</button>
-                </>
-              )}
-              <label className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded cursor-pointer">
-                {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" /> : (ua.resource ? 'Remplacer' : 'Uploader')}
-                <input type="file" accept=".pdf,.ppt,.pptx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('resource', f); e.target.value = ''; }} />
-              </label>
-            </>
-          )}
-          {ua.type === 'video' && (
-            <>
-              {ua.videoContent && (
-                <>
-                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
-                  <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/videos/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=ua.videoContent!.originalName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Télécharger</button>
-                </>
-              )}
-              <label className="px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded cursor-pointer">
-                {uploadingId === ua.id ? <span className="inline-block w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" /> : (ua.videoContent ? 'Remplacer' : 'Uploader')}
-                <input type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload('video', f); e.target.value = ''; }} />
-              </label>
-            </>
-          )}
-          <button onClick={onDelete} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded">Supprimer</button>
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+          {typeActions}
         </div>
       </td>
     </tr>

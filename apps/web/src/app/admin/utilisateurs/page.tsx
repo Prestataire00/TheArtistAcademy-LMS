@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/admin/ToastContext';
+import { ResponsiveList } from '@/components/ResponsiveList';
 
 interface StaffUser {
   id: string;
@@ -124,62 +125,97 @@ export default function AdminUtilisateursPage() {
           <p className="text-gray-400">Aucun utilisateur admin ou formateur.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left font-medium text-gray-500" style={{ width: 200, maxWidth: 200 }}>Nom</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Email</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Role</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Créé le</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Dernière connexion</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900" style={{ width: 200, maxWidth: 200 }}>
-                    {editingName === u.id ? (
-                      <input
-                        autoFocus
-                        value={editingNameValue}
-                        onChange={(e) => setEditingNameValue(e.target.value)}
-                        onBlur={() => handleNameSave(u)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleNameSave(u); if (e.key === 'Escape') setEditingName(null); }}
-                        className="w-full px-2 py-0.5 -ml-2 border border-brand-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 box-border"
-                      />
-                    ) : (
-                      <span
-                        onClick={() => { setEditingName(u.id); setEditingNameValue(u.fullName); }}
-                        className="cursor-pointer hover:underline hover:text-brand-700 transition-colors"
-                      >{u.fullName}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={u.role}
-                      onChange={(e) => handleRoleChange(u, e.target.value)}
-                      className="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white"
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="trainer">Formateur</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{formatDate(u.createdAt)}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{formatDate(u.lastSeenAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleResetPassword(u)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Réinit. mdp</button>
-                      <button onClick={() => handleDelete(u)} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors">Supprimer</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveList<StaffUser>
+          items={users}
+          rowKey={(u) => u.id}
+          titleKey={(u) => (
+            editingName === u.id ? (
+              <input
+                autoFocus
+                value={editingNameValue}
+                onChange={(e) => setEditingNameValue(e.target.value)}
+                onBlur={() => handleNameSave(u)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleNameSave(u); if (e.key === 'Escape') setEditingName(null); }}
+                className="w-full px-2 py-0.5 -ml-2 border border-brand-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 box-border"
+              />
+            ) : (
+              <span
+                onClick={() => { setEditingName(u.id); setEditingNameValue(u.fullName); }}
+                className="cursor-pointer hover:underline hover:text-brand-700 transition-colors"
+              >{u.fullName}</span>
+            )
+          )}
+          subtitleKey={(u) => <span className="truncate block">{u.email}</span>}
+          badgeKey={(u) => (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+              u.role === 'admin' ? 'bg-brand-50 text-brand-700' : 'bg-blue-50 text-blue-700'
+            }`}>
+              {u.role === 'admin' ? 'Admin' : 'Formateur'}
+            </span>
+          )}
+          columns={[
+            {
+              key: 'name', label: 'Nom', mobileHidden: true,
+              render: (u) => (
+                editingName === u.id ? (
+                  <input
+                    autoFocus
+                    value={editingNameValue}
+                    onChange={(e) => setEditingNameValue(e.target.value)}
+                    onBlur={() => handleNameSave(u)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleNameSave(u); if (e.key === 'Escape') setEditingName(null); }}
+                    className="w-full px-2 py-0.5 -ml-2 border border-brand-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 box-border"
+                  />
+                ) : (
+                  <span
+                    onClick={() => { setEditingName(u.id); setEditingNameValue(u.fullName); }}
+                    className="cursor-pointer hover:underline hover:text-brand-700 transition-colors font-medium text-gray-900"
+                  >{u.fullName}</span>
+                )
+              ),
+            },
+            {
+              key: 'email', label: 'Email', mobileHidden: true,
+              render: (u) => <span className="text-gray-500">{u.email}</span>,
+            },
+            {
+              key: 'role', label: 'Rôle',
+              render: (u) => (
+                <select
+                  value={u.role}
+                  onChange={(e) => handleRoleChange(u, e.target.value)}
+                  className="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="trainer">Formateur</option>
+                </select>
+              ),
+            },
+            {
+              key: 'created', label: 'Créé le',
+              render: (u) => <span className="text-gray-500 text-xs">{formatDate(u.createdAt)}</span>,
+            },
+            {
+              key: 'lastSeen', label: 'Dernière connexion',
+              render: (u) => <span className="text-gray-500 text-xs">{formatDate(u.lastSeenAt)}</span>,
+            },
+            {
+              key: 'actions', label: 'Actions', align: 'right', mobileHidden: true,
+              render: (u) => (
+                <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                  <button onClick={() => handleResetPassword(u)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Réinit. mdp</button>
+                  <button onClick={() => handleDelete(u)} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors">Supprimer</button>
+                </div>
+              ),
+            },
+          ]}
+          actions={(u) => (
+            <>
+              <button onClick={() => handleResetPassword(u)} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1">Réinit. mdp</button>
+              <button onClick={() => handleDelete(u)} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">Supprimer</button>
+            </>
+          )}
+        />
       )}
     </div>
   );

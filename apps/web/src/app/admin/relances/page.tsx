@@ -43,6 +43,7 @@ interface Rule {
   excludeCompleted: boolean;
   excludeExpired: boolean;
   excludeUnenrolled: boolean;
+  archivedAt: string | null;
 }
 
 interface Template {
@@ -120,39 +121,52 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function RulesTab() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<Rule | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   async function reload() {
-    setLoading(true);
+    setRefreshing(true);
+    const rulesQs = showArchived ? '?includeArchived=1' : '';
     const [r, t] = await Promise.all([
-      api.get<{ data: Rule[] }>('/admin/relances/rules'),
+      api.get<{ data: Rule[] }>(`/admin/relances/rules${rulesQs}`),
       api.get<{ data: Template[] }>('/admin/relances/templates'),
     ]);
     setRules(r.data);
     setTemplates(t.data);
-    setLoading(false);
+    setRefreshing(false);
+    setInitialLoading(false);
   }
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [showArchived]);
 
   async function toggleActive(rule: Rule) {
     await api.put(`/admin/relances/rules/${rule.id}`, { isActive: !rule.isActive });
     reload();
   }
 
-  async function remove(rule: Rule) {
-    if (!confirm(`Supprimer la regle "${rule.name}" ? Les logs existants seront conserves.`)) return;
-    await api.delete(`/admin/relances/rules/${rule.id}`);
+  async function archive(rule: Rule) {
+    if (!confirm(`Archiver la regle "${rule.name}" ? Elle sera desactivee et masquee, les logs sont conserves.`)) return;
+    await api.post(`/admin/relances/rules/${rule.id}/archive`);
     reload();
   }
 
-  if (loading) return <Loading />;
+  async function unarchive(rule: Rule) {
+    await api.post(`/admin/relances/rules/${rule.id}/unarchive`);
+    reload();
+  }
+
+  if (initialLoading) return <Loading />;
 
   return (
     <>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Afficher les regles archivees
+        </label>
         <button
           onClick={() => setCreating(true)}
           className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700"
@@ -164,39 +178,105 @@ function RulesTab() {
       {rules.length === 0 ? (
         <Empty text="Aucune regle definie" />
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Nom</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Delai</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Heure envoi</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Template</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Actif</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-500"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {rules.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-900 font-medium">{r.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{r.delayDays} j</td>
-                  <td className="px-4 py-3 text-gray-600">{String(r.sendHour).padStart(2, '0')}:00</td>
-                  <td className="px-4 py-3 text-gray-600">
-                    <span className="text-xs">{r.templateName}</span>
-                    {r.templateVersion && <span className="text-xs text-gray-400 ml-1">v{r.templateVersion}</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Toggle checked={r.isActive} onChange={() => toggleActive(r)} />
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => setEditing(r)} className="text-xs text-brand-600 hover:text-brand-700 px-2">Editer</button>
-                    <button onClick={() => remove(r)} className="text-xs text-red-500 hover:text-red-600 px-2">Supprimer</button>
-                  </td>
+        <div className={`transition-opacity duration-150 ${refreshing ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+          {/* ─── Vue cartes (mobile) ─────────────────────────────── */}
+          <ul className="md:hidden space-y-3">
+            {rules.map((r) => {
+              const isArchived = !!r.archivedAt;
+              return (
+                <li
+                  key={r.id}
+                  className={`bg-white rounded-lg border border-gray-200 p-4 space-y-3 ${isArchived ? 'opacity-60' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 break-words">{r.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {r.delayDays} j — envoi à {String(r.sendHour).padStart(2, '0')}:00
+                      </p>
+                    </div>
+                    {isArchived ? (
+                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0">
+                        Archivee
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Toggle checked={r.isActive} onChange={() => toggleActive(r)} />
+                        <span className="text-xs text-gray-500">Actif</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-gray-600">
+                    <span className="text-gray-400">Template : </span>
+                    <span className="font-mono">{r.templateName}</span>
+                    {r.templateVersion && <span className="text-gray-400 ml-1">v{r.templateVersion}</span>}
+                  </div>
+
+                  <div className="flex items-center gap-1 pt-1 border-t border-gray-100">
+                    {isArchived ? (
+                      <button onClick={() => unarchive(r)} className="text-xs text-green-600 hover:text-green-700 px-2 py-1">
+                        Desarchiver
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => setEditing(r)} className="text-xs text-brand-600 hover:text-brand-700 px-2 py-1">Editer</button>
+                        <button onClick={() => archive(r)} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">Archiver</button>
+                      </>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* ─── Vue tableau (desktop) ───────────────────────────── */}
+          <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Nom</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Delai</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Heure envoi</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Template</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Actif</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {rules.map((r) => {
+                  const isArchived = !!r.archivedAt;
+                  return (
+                    <tr key={r.id} className={`hover:bg-gray-50 ${isArchived ? 'opacity-60 bg-gray-50/50' : ''}`}>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {r.name}
+                        {isArchived && <span className="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 align-middle">Archivee</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{r.delayDays} j</td>
+                      <td className="px-4 py-3 text-gray-600">{String(r.sendHour).padStart(2, '0')}:00</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        <span className="text-xs">{r.templateName}</span>
+                        {r.templateVersion && <span className="text-xs text-gray-400 ml-1">v{r.templateVersion}</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isArchived ? <span className="text-xs text-gray-400">—</span> : <Toggle checked={r.isActive} onChange={() => toggleActive(r)} />}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {isArchived ? (
+                          <button onClick={() => unarchive(r)} className="text-xs text-green-600 hover:text-green-700 px-2">Desarchiver</button>
+                        ) : (
+                          <>
+                            <button onClick={() => setEditing(r)} className="text-xs text-brand-600 hover:text-brand-700 px-2">Editer</button>
+                            <button onClick={() => archive(r)} className="text-xs text-red-500 hover:text-red-600 px-2">Archiver</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -358,35 +438,67 @@ function TemplatesTab() {
       {templates.length === 0 ? (
         <Empty text="Aucun template defini" />
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Nom</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Version</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Sujet</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Maj</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-500"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {templates.map((t) => (
-                <tr key={t.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-900 font-medium">{t.name}</td>
-                  <td className="px-4 py-3 text-gray-600">v{t.version}</td>
-                  <td className="px-4 py-3 text-gray-600 max-w-md truncate">{t.subject}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{formatDate(t.updatedAt)}</td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => setPreview(t)} className="text-xs text-gray-600 hover:text-gray-900 px-2">Previsualiser</button>
-                    <button onClick={() => duplicate(t)} className="text-xs text-gray-600 hover:text-gray-900 px-2">Dupliquer</button>
-                    <button onClick={() => setEditing(t)} className="text-xs text-brand-600 hover:text-brand-700 px-2">Editer</button>
-                    <button onClick={() => remove(t)} className="text-xs text-red-500 hover:text-red-600 px-2">Supprimer</button>
-                  </td>
+        <>
+          {/* ─── Vue cartes (mobile) ─────────────────────────────── */}
+          <ul className="md:hidden space-y-3">
+            {templates.map((t) => (
+              <li key={t.id} className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900 font-mono text-xs break-all">{t.name}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Maj {formatDate(t.updatedAt)}</p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">
+                    v{t.version}
+                  </span>
+                </div>
+
+                <div>
+                  <p className="text-[11px] text-gray-400 mb-0.5">Sujet</p>
+                  <p className="text-sm text-gray-700 line-clamp-2">{t.subject}</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-gray-100">
+                  <button onClick={() => setPreview(t)} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1">Previsualiser</button>
+                  <button onClick={() => duplicate(t)} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1">Dupliquer</button>
+                  <button onClick={() => setEditing(t)} className="text-xs text-brand-600 hover:text-brand-700 px-2 py-1">Editer</button>
+                  <button onClick={() => remove(t)} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">Supprimer</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* ─── Vue tableau (desktop) ───────────────────────────── */}
+          <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Nom</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Version</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Sujet</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Maj</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {templates.map((t) => (
+                  <tr key={t.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-gray-900 font-medium">{t.name}</td>
+                    <td className="px-4 py-3 text-gray-600">v{t.version}</td>
+                    <td className="px-4 py-3 text-gray-600 max-w-md truncate">{t.subject}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{formatDate(t.updatedAt)}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <button onClick={() => setPreview(t)} className="text-xs text-gray-600 hover:text-gray-900 px-2">Previsualiser</button>
+                      <button onClick={() => duplicate(t)} className="text-xs text-gray-600 hover:text-gray-900 px-2">Dupliquer</button>
+                      <button onClick={() => setEditing(t)} className="text-xs text-brand-600 hover:text-brand-700 px-2">Editer</button>
+                      <button onClick={() => remove(t)} className="text-xs text-red-500 hover:text-red-600 px-2">Supprimer</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {(creating || editing) && (
@@ -792,43 +904,82 @@ function LogsTab() {
       {loading ? <Loading /> : logs.length === 0 ? (
         <Empty text="Aucune relance pour ces filtres" />
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Destinataire</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Regle</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Template</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Statut</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 hidden xl:table-cell">Erreur</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {logs.map((l) => (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(l.sentAt)}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-gray-900">{l.recipientName}</p>
-                      <p className="text-xs text-gray-400">{l.recipientEmail}</p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">{l.formationTitle}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600">{l.ruleName} <span className="text-gray-400">({l.ruleDelayDays}j)</span></td>
-                    <td className="px-4 py-3 text-xs text-gray-600">{l.templateName}{l.templateVersion && <span className="text-gray-400 ml-1">v{l.templateVersion}</span>}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[l.status] || statusStyles.skipped}`}>
-                        {l.status === 'sent' ? 'Envoye' : l.status === 'failed' ? 'Echec' : 'Ignore'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-red-500 hidden xl:table-cell">{l.errorMessage || '—'}</td>
+        <>
+          {/* ─── Vue cartes (mobile) ─────────────────────────────── */}
+          <ul className="md:hidden space-y-3">
+            {logs.map((l) => (
+              <li key={l.id} className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-gray-900 truncate">{l.recipientName}</p>
+                    <p className="text-xs text-gray-400 truncate">{l.recipientEmail}</p>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${statusStyles[l.status] || statusStyles.skipped}`}>
+                    {l.status === 'sent' ? 'Envoye' : l.status === 'failed' ? 'Echec' : 'Ignore'}
+                  </span>
+                </div>
+
+                <p className="text-xs text-gray-700 line-clamp-2">{l.formationTitle}</p>
+
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 pt-1 border-t border-gray-100">
+                  <span>{formatDate(l.sentAt)}</span>
+                  <span>
+                    <span className="text-gray-400">Regle : </span>
+                    {l.ruleName} <span className="text-gray-400">({l.ruleDelayDays}j)</span>
+                  </span>
+                  <span>
+                    <span className="text-gray-400">Template : </span>
+                    <span className="font-mono">{l.templateName}</span>
+                    {l.templateVersion && <span className="text-gray-400 ml-0.5">v{l.templateVersion}</span>}
+                  </span>
+                </div>
+
+                {l.errorMessage && (
+                  <p className="text-xs text-red-500 line-clamp-2">{l.errorMessage}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {/* ─── Vue tableau (desktop) ───────────────────────────── */}
+          <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">Destinataire</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">Regle</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">Template</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">Statut</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 hidden xl:table-cell">Erreur</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {logs.map((l) => (
+                    <tr key={l.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(l.sentAt)}</td>
+                      <td className="px-4 py-3">
+                        <p className="text-gray-900">{l.recipientName}</p>
+                        <p className="text-xs text-gray-400">{l.recipientEmail}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{l.formationTitle}</td>
+                      <td className="px-4 py-3 text-xs text-gray-600">{l.ruleName} <span className="text-gray-400">({l.ruleDelayDays}j)</span></td>
+                      <td className="px-4 py-3 text-xs text-gray-600">{l.templateName}{l.templateVersion && <span className="text-gray-400 ml-1">v{l.templateVersion}</span>}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[l.status] || statusStyles.skipped}`}>
+                          {l.status === 'sent' ? 'Envoye' : l.status === 'failed' ? 'Echec' : 'Ignore'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-red-500 hidden xl:table-cell">{l.errorMessage || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

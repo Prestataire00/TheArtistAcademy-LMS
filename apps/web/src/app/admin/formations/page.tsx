@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { SlideOver } from '@/components/SlideOver';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/admin/ToastContext';
+import { ResponsiveList } from '@/components/ResponsiveList';
 
 interface Formation {
   id: string;
@@ -89,52 +90,83 @@ export default function AdminFormationsPage() {
           <p className="text-gray-400">Aucune formation. Créez-en une pour commencer.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Formateur</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden sm:table-cell">Mode</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Modules</th>
-                <th className="px-4 py-3 text-center font-medium text-gray-500 hidden md:table-cell">Publiée</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {formations.map((f) => (
-                <tr key={f.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{f.title}</p>
-                    {f.description && <p className="text-xs text-gray-400 truncate max-w-xs">{f.description}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs hidden sm:table-cell">{f.trainerName || <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${f.pathwayMode === 'linear' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-                      {f.pathwayMode === 'linear' ? 'Linéaire' : 'Libre'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{f.modulesCount}</td>
-                  <td className="px-4 py-3 hidden md:table-cell text-center">
-                    <Toggle checked={f.isPublished} onChange={() => handleTogglePublish(f)} />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <a href={`/admin/formations/${f.id}`} className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded transition-colors font-medium">Gérer les modules</a>
-                      <button onClick={() => setEditing(f)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Éditer">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                        </svg>
-                      </button>
-                      <button onClick={() => handleDuplicate(f.id)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Dupliquer</button>
-                      <button onClick={() => handleDelete(f.id, f.title)} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors">Supprimer</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveList<Formation>
+          items={formations}
+          rowKey={(f) => f.id}
+          titleKey={(f) => (
+            <a href={`/admin/formations/${f.id}`} className="hover:text-brand-700 transition-colors">
+              {f.title}
+            </a>
+          )}
+          subtitleKey={(f) => (f.description ? <span className="line-clamp-2">{f.description}</span> : null)}
+          badgeKey={(f) => (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+              f.isPublished ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {f.isPublished ? 'Publiée' : 'Brouillon'}
+            </span>
+          )}
+          columns={[
+            {
+              key: 'title', label: 'Formation', mobileHidden: true,
+              render: (f) => (
+                <>
+                  <p className="font-medium text-gray-900">{f.title}</p>
+                  {f.description && <p className="text-xs text-gray-400 truncate max-w-xs">{f.description}</p>}
+                </>
+              ),
+            },
+            {
+              key: 'trainer', label: 'Formateur', mobileHidden: true,
+              render: (f) => <span className="text-xs text-gray-500">{f.trainerName || <span className="text-gray-300">—</span>}</span>,
+            },
+            {
+              key: 'mode', label: 'Mode',
+              render: (f) => (
+                <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
+                  f.pathwayMode === 'linear' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {f.pathwayMode === 'linear' ? 'Linéaire' : 'Libre'}
+                </span>
+              ),
+            },
+            {
+              key: 'threshold', label: 'Seuil complétion',
+              render: (f) => <span className="text-gray-700">{f.videoCompletionThreshold}%</span>,
+            },
+            {
+              key: 'modules', label: 'Modules',
+              render: (f) => <span className="text-gray-700">{f.modulesCount}</span>,
+            },
+            {
+              key: 'published', label: 'Publiée', align: 'center', mobileHidden: true,
+              render: (f) => <Toggle checked={f.isPublished} onChange={() => handleTogglePublish(f)} />,
+            },
+            {
+              key: 'actions', label: 'Actions', align: 'right', mobileHidden: true,
+              render: (f) => (
+                <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                  <a href={`/admin/formations/${f.id}`} className="px-2 py-1 text-xs text-brand-600 hover:bg-brand-50 rounded transition-colors font-medium">Gérer les modules</a>
+                  <button onClick={() => setEditing(f)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Éditer">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                    </svg>
+                  </button>
+                  <button onClick={() => handleDuplicate(f.id)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Dupliquer</button>
+                  <button onClick={() => handleDelete(f.id, f.title)} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors">Supprimer</button>
+                </div>
+              ),
+            },
+          ]}
+          actions={(f) => (
+            <>
+              <a href={`/admin/formations/${f.id}`} className="text-xs text-brand-600 hover:text-brand-700 px-2 py-1 font-medium">Gérer les modules</a>
+              <button onClick={() => setEditing(f)} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1">Éditer</button>
+              <button onClick={() => handleDuplicate(f.id)} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1">Dupliquer</button>
+              <button onClick={() => handleDelete(f.id, f.title)} className="text-xs text-red-500 hover:text-red-600 px-2 py-1">Supprimer</button>
+            </>
+          )}
+        />
       )}
     </div>
   );

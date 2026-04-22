@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { ResponsiveList } from '@/components/ResponsiveList';
 
 interface Apprenant {
   userId: string;
@@ -88,46 +89,57 @@ export default function AdminApprenantsPage() {
           <p className="text-gray-400">Aucun apprenant inscrit</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Apprenant</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Statut</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Progression</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 hidden md:table-cell">Dernière activité</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {data.apprenants.map((a, i) => (
-                  <tr key={`${a.userId}-${a.formationId}-${i}`} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{a.fullName}</p>
-                      <p className="text-xs text-gray-400">{a.email}</p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{a.formationTitle}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[a.status] || statusStyles.not_started}`}>
-                        {statusLabels[a.status] || a.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-1.5 bg-brand-600 rounded-full" style={{ width: `${a.progressPercent}%` }} />
-                        </div>
-                        <span className="text-xs text-gray-500">{a.progressPercent}%</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{timeAgo(a.lastActivity)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ResponsiveList<Apprenant>
+          items={data.apprenants}
+          rowKey={(a, i) => `${a.userId}-${a.formationId}-${i}`}
+          titleKey={(a) => a.fullName}
+          subtitleKey={(a) => <span className="truncate block">{a.email}</span>}
+          badgeKey={(a) => (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+              statusStyles[a.status] || statusStyles.not_started
+            }`}>
+              {statusLabels[a.status] || a.status}
+            </span>
+          )}
+          columns={[
+            {
+              key: 'name', label: 'Apprenant', mobileHidden: true,
+              render: (a) => (
+                <>
+                  <p className="font-medium text-gray-900">{a.fullName}</p>
+                  <p className="text-xs text-gray-400">{a.email}</p>
+                </>
+              ),
+            },
+            {
+              key: 'formation', label: 'Formation',
+              render: (a) => <span className="text-xs text-gray-600 break-words">{a.formationTitle}</span>,
+            },
+            {
+              key: 'status', label: 'Statut', mobileHidden: true,
+              render: (a) => (
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[a.status] || statusStyles.not_started}`}>
+                  {statusLabels[a.status] || a.status}
+                </span>
+              ),
+            },
+            {
+              key: 'progress', label: 'Progression',
+              render: (a) => (
+                <div className="flex items-center gap-2">
+                  <div className="w-24 md:w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-brand-600 rounded-full" style={{ width: `${a.progressPercent}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500">{a.progressPercent}%</span>
+                </div>
+              ),
+            },
+            {
+              key: 'activity', label: 'Dernière activité',
+              render: (a) => <span className="text-xs text-gray-500">{timeAgo(a.lastActivity)}</span>,
+            },
+          ]}
+        />
       )}
     </div>
   );

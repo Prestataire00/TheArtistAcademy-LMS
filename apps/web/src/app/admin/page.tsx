@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { ResponsiveList } from '@/components/ResponsiveList';
 
 interface SessionStat {
   formationId: string;
@@ -51,37 +52,43 @@ export default function AdminDashboard() {
       {data.sessions.length === 0 ? (
         <Empty msg="Aucune formation avec des apprenants" />
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Apprenants</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Progression moy.</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Completion</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {data.sessions.map((s) => (
-                <tr key={s.formationId} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{s.title}</td>
-                  <td className="px-4 py-3 text-gray-600">{s.learnersCount}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-1.5 bg-brand-600 rounded-full" style={{ width: `${s.avgProgress}%` }} />
-                      </div>
-                      <span className="text-xs text-gray-500">{s.avgProgress}%</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {s.completedCount}/{s.learnersCount} ({s.completionRate}%)
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveList<SessionStat>
+          items={data.sessions}
+          rowKey={(s) => s.formationId}
+          titleKey={(s) => s.title}
+          badgeKey={(s) => (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 whitespace-nowrap">
+              {s.completionRate}%
+            </span>
+          )}
+          columns={[
+            {
+              key: 'title', label: 'Formation', mobileHidden: true,
+              render: (s) => <span className="font-medium text-gray-900">{s.title}</span>,
+            },
+            {
+              key: 'learners', label: 'Apprenants',
+              render: (s) => <span className="text-gray-700">{s.learnersCount}</span>,
+            },
+            {
+              key: 'progress', label: 'Progression moy.',
+              render: (s) => (
+                <div className="flex items-center gap-2">
+                  <div className="w-24 md:w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-brand-600 rounded-full" style={{ width: `${s.avgProgress}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500">{s.avgProgress}%</span>
+                </div>
+              ),
+            },
+            {
+              key: 'completion', label: 'Completion',
+              render: (s) => (
+                <span className="text-gray-700 text-xs">{s.completedCount}/{s.learnersCount} ({s.completionRate}%)</span>
+              ),
+            },
+          ]}
+        />
       )}
     </div>
   );

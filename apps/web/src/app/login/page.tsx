@@ -77,7 +77,7 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 min-h-[44px]"
               placeholder="votre@email.fr"
             />
           </div>
@@ -94,13 +94,14 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                className="w-full px-3 py-2.5 pr-11 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 min-h-[44px]"
                 placeholder="••••••••"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 flex items-center justify-center w-10 h-10"
                 tabIndex={-1}
               >
                 {showPassword ? (
@@ -120,7 +121,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px]"
           >
             {loading ? 'Connexion...' : 'Se connecter'}
           </button>
@@ -128,7 +129,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => setShowForgot(true)}
-            className="w-full text-center text-xs text-gray-500 hover:text-brand-600 transition-colors"
+            className="w-full text-center text-xs text-gray-500 hover:text-brand-600 transition-colors py-2 min-h-[44px]"
           >
             Mot de passe oublié ?
           </button>
@@ -140,7 +141,7 @@ export default function LoginPage() {
             {forgotSent ? (
               <div>
                 <p className="text-sm text-gray-600 mb-3">Si cette adresse est connue, un email contenant un lien de reinitialisation a ete envoye.</p>
-                <button onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(''); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Retour à la connexion</button>
+                <button onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(''); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium py-2 min-h-[44px]">Retour à la connexion</button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -149,12 +150,12 @@ export default function LoginPage() {
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   placeholder="votre@email.fr"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 min-h-[44px]"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={() => { setShowForgot(false); setForgotEmail(''); }}
-                    className="flex-1 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                    className="flex-1 px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg min-h-[44px]"
                   >Annuler</button>
                   <button
                     disabled={forgotLoading || !forgotEmail}
@@ -170,7 +171,7 @@ export default function LoginPage() {
                       setForgotLoading(false);
                       setForgotSent(true);
                     }}
-                    className="flex-1 px-3 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+                    className="flex-1 px-3 py-2.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 min-h-[44px]"
                   >{forgotLoading ? 'Envoi...' : 'Envoyer'}</button>
                 </div>
               </div>

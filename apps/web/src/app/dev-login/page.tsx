@@ -67,7 +67,7 @@ export default function DevLoginPage() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '2rem',
+      padding: '1rem',
       backgroundColor: '#f9fafb',
       fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
@@ -75,10 +75,11 @@ export default function DevLoginPage() {
         backgroundColor: '#fff',
         borderRadius: '12px',
         border: '1px solid #e5e7eb',
-        padding: '2.5rem',
+        padding: '1.5rem',
         maxWidth: '380px',
         width: '100%',
         textAlign: 'center',
+        boxSizing: 'border-box',
       }}>
         <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', marginBottom: '0.25rem' }}>
           Dev Login
@@ -107,7 +108,8 @@ export default function DevLoginPage() {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '0.625rem 1rem',
+              padding: '0.875rem 1rem',
+              minHeight: '44px',
               backgroundColor: '#B5294E',
               color: '#fff',
               borderRadius: '8px',
@@ -126,7 +128,8 @@ export default function DevLoginPage() {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '0.625rem 1rem',
+              padding: '0.875rem 1rem',
+              minHeight: '44px',
               backgroundColor: '#52545F',
               color: '#fff',
               borderRadius: '8px',
@@ -145,7 +148,8 @@ export default function DevLoginPage() {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '0.625rem 1rem',
+              padding: '0.875rem 1rem',
+              minHeight: '44px',
               backgroundColor: '#272831',
               color: '#fff',
               borderRadius: '8px',
@@ -160,7 +164,7 @@ export default function DevLoginPage() {
           </button>
         </div>
 
-        <p style={{ marginTop: '1.5rem', fontSize: '0.75rem', color: '#9ca3af' }}>
+        <p style={{ marginTop: '1.5rem', fontSize: '0.75rem', color: '#9ca3af', wordBreak: 'break-word' }}>
           test@artistacademy.fr → /formations/{FORMATION_ID.substring(0, 8)}...
         </p>
       </div>
