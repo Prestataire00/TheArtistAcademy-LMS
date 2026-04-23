@@ -190,7 +190,7 @@ export default function SessionDetailPage() {
                   </tr>
                 ) : (
                   filtered.map((a) => (
-                    <tr key={a.userId} className="hover:bg-gray-50 transition-colors">
+                    <tr key={a.enrollmentId} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <a
                           href={`/formateur/sessions/${formationId}/apprenants/${a.userId}`}
