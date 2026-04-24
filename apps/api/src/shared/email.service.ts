@@ -1,35 +1,8 @@
-import axios from 'axios';
+import { Resend } from 'resend';
 import { env } from '../config/env';
 import { logger } from './logger';
 
-interface SendEmailParams {
-  to: { email: string; name?: string };
-  templateId: string;
-  params?: Record<string, unknown>;
-}
-
-export async function sendEmail(params: SendEmailParams): Promise<{ messageId: string }> {
-  const response = await axios.post(
-    'https://api.brevo.com/v3/smtp/email',
-    {
-      sender: { email: env.EMAIL_FROM_ADDRESS, name: env.EMAIL_FROM_NAME },
-      to: [params.to],
-      templateId: Number(params.templateId),
-      params: params.params,
-    },
-    {
-      headers: {
-        'api-key': env.BREVO_API_KEY,
-        'Content-Type': 'application/json',
-      },
-    },
-  );
-
-  logger.debug('Email sent', { to: params.to.email, templateId: params.templateId });
-  return { messageId: response.data.messageId };
-}
-
-// ─── Envoi HTML direct via Brevo ─────────────────────────────────────────────
+const resend = new Resend(env.RESEND_API_KEY);
 
 interface SendHtmlEmailParams {
   to: { email: string; name?: string };
@@ -38,31 +11,29 @@ interface SendHtmlEmailParams {
 }
 
 /**
- * Envoi d'un email HTML direct (sans template Brevo).
+ * Envoi d'un email HTML direct via Resend.
  * Throw en cas d'erreur : l'appelant gère le fallback / logging.
  */
 export async function sendHtmlEmail(params: SendHtmlEmailParams): Promise<void> {
-  if (!env.BREVO_API_KEY) {
-    logger.warn('BREVO_API_KEY not set — HTML email skipped', { to: params.to.email, subject: params.subject });
+  if (!env.RESEND_API_KEY) {
+    logger.warn('RESEND_API_KEY not set — HTML email skipped', { to: params.to.email, subject: params.subject });
     return;
   }
 
-  await axios.post(
-    'https://api.brevo.com/v3/smtp/email',
-    {
-      sender: { email: env.EMAIL_FROM_ADDRESS, name: env.EMAIL_FROM_NAME },
-      to: [params.to],
-      subject: params.subject,
-      htmlContent: params.html,
-    },
-    {
-      headers: {
-        'api-key': env.BREVO_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      timeout: 15_000,
-    },
-  );
+  const from = `${env.EMAIL_FROM_NAME} <${env.EMAIL_FROM_ADDRESS}>`;
+
+  const { error } = await resend.emails.send({
+    from,
+    to: [params.to.email],
+    subject: params.subject,
+    html: params.html,
+  });
+
+  if (error) {
+    // On lève avec message explicite pour que l'appelant puisse logger / stocker l'erreur
+    const message = (error as any)?.message ?? JSON.stringify(error);
+    throw new Error(message);
+  }
 
   logger.debug('HTML email sent', { to: params.to.email, subject: params.subject });
 }

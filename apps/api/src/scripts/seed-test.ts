@@ -227,6 +227,73 @@ async function main() {
     }
   }
 
+  // ─── 10b. Eva Lambert : 30% sur Module 1 (non terminee), inscrit depuis 10j ──
+  const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+  const in20Days = new Date(now.getTime() + 20 * 24 * 60 * 60 * 1000);
+
+  const eva = await prisma.user.upsert({
+    where: { email: 'eva.lambert@live.fr' },
+    update: { lastSeenAt: now },
+    create: { email: 'eva.lambert@live.fr', fullName: 'Eva Lambert', role: 'learner', lastSeenAt: now },
+  });
+
+  let evaEnroll = await prisma.enrollment.findFirst({
+    where: { userId: eva.id, formationId: targetFormationId },
+  });
+  if (!evaEnroll) {
+    evaEnroll = await prisma.enrollment.create({
+      data: {
+        userId: eva.id,
+        formationId: targetFormationId,
+        dendreoEnrolmentId: `seed_eva_${Date.now()}`,
+        startDate: tenDaysAgo,
+        endDate: in20Days,
+        status: 'active',
+      },
+    });
+  }
+
+  // 30% du Module 1 : les premieres UAs completees, la suivante en cours
+  const evaCompleteCount = Math.max(1, Math.ceil(targetUAs.length * 0.3));
+  for (let i = 0; i < targetUAs.length; i++) {
+    const uaItem = targetUAs[i];
+    const isCompleted = i < evaCompleteCount;
+    const isInProgress = i === evaCompleteCount;
+    if (!isCompleted && !isInProgress) continue;
+    await prisma.uAProgress.upsert({
+      where: { enrollmentId_uaId: { enrollmentId: evaEnroll.id, uaId: uaItem.id } },
+      update: {},
+      create: {
+        enrollmentId: evaEnroll.id,
+        uaId: uaItem.id,
+        status: isCompleted ? 'completed' : 'in_progress',
+        videoPositionSeconds: isCompleted ? 120 : 40,
+        videoPercentWatched: isCompleted ? 100 : 35,
+        timeSpentSeconds: isCompleted ? 240 : 60,
+        firstAccessedAt: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000),
+        completedAt: isCompleted ? new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000) : null,
+      },
+    });
+  }
+
+  // ModuleProgress : 30%, in_progress (Module 1 non termine)
+  if (targetModule) {
+    await prisma.moduleProgress.upsert({
+      where: { enrollmentId_moduleId: { enrollmentId: evaEnroll.id, moduleId: targetModule.id } },
+      update: { status: 'in_progress', progressPercent: 30 },
+      create: {
+        enrollmentId: evaEnroll.id,
+        moduleId: targetModule.id,
+        status: 'in_progress',
+        progressPercent: 30,
+        timeSpentSeconds: 360,
+      },
+    });
+  }
+
+  console.log(`  Eva        : ${eva.id} (${eva.email})`);
+  console.log(`    Enroll   : ${evaEnroll.id} -> ${targetFormationId} (Module 1 a 30%, non termine)`);
+
   // ─── 11. Associer le formateur aux formations existantes ─────────────────────
   const trainer = await prisma.user.upsert({
     where: { email: 'formateur@the-artist-academy.fr' },

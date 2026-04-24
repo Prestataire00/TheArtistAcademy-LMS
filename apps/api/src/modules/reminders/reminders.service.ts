@@ -136,8 +136,9 @@ export async function duplicateTemplate(sourceName: string) {
 
 // ─── Rules : CRUD ────────────────────────────────────────────────────────────
 
-export async function listRules() {
+export async function listRules(options: { includeArchived?: boolean } = {}) {
   const rules = await prisma.reminderRule.findMany({
+    where: options.includeArchived ? undefined : { archivedAt: null },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -161,6 +162,7 @@ export async function listRules() {
     excludeCompleted: r.excludeCompleted,
     excludeExpired: r.excludeExpired,
     excludeUnenrolled: r.excludeUnenrolled,
+    archivedAt: r.archivedAt ? r.archivedAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   }));
@@ -208,8 +210,22 @@ export async function updateRule(
   return prisma.reminderRule.update({ where: { id }, data });
 }
 
-export async function deleteRule(id: string) {
-  await prisma.reminderRule.delete({ where: { id } });
+/**
+ * Archivage "soft-delete" : la règle disparaît des listes actives mais
+ * reste référencée par les logs historiques. Peut être désarchivée.
+ */
+export async function archiveRule(id: string) {
+  return prisma.reminderRule.update({
+    where: { id },
+    data: { archivedAt: new Date(), isActive: false },
+  });
+}
+
+export async function unarchiveRule(id: string) {
+  return prisma.reminderRule.update({
+    where: { id },
+    data: { archivedAt: null },
+  });
 }
 
 // ─── Rendu du template : remplacement des variables ──────────────────────────
@@ -316,51 +332,91 @@ interface EligibilityFilters {
   excludeUnenrolled: boolean;
 }
 
-async function findEligibleEnrollments(filters: EligibilityFilters): Promise<EnrollmentWithContext[]> {
+type SkipReason = 'delai_non_atteint' | 'formation_terminee' | 'acces_cloture' | 'desinscrit';
+
+interface SkippedEnrollment {
+  enrollmentId: string;
+  email: string;
+  formation: string;
+  reason: SkipReason;
+  detail?: string;
+}
+
+interface EligibilityResult {
+  eligible: EnrollmentWithContext[];
+  skipped: SkippedEnrollment[];
+}
+
+async function findEligibleEnrollments(filters: EligibilityFilters, ruleName: string): Promise<EligibilityResult> {
   const threshold = new Date(Date.now() - filters.delayDays * 24 * 60 * 60 * 1000);
   const now = new Date();
 
-  const where: any = {
-    moduleProgresses: {
-      some: {
-        status: { not: 'completed' },
-        updatedAt: { lt: threshold },
-      },
-    },
-  };
-
-  if (filters.excludeUnenrolled) where.status = 'active';
-  if (filters.excludeExpired) where.endDate = { gt: now };
-  if (filters.excludeCompleted) {
-    // Formation considérée terminée à partir de 99% de progression
-    where.OR = [
-      { formationProgress: { is: null } },
-      { formationProgress: { progressPercent: { lt: 99 } } },
-    ];
-  }
-
+  // Query large : on récupère toutes les inscriptions ayant au moins un module non terminé.
+  // Les exclusions sont appliquées EN MÉMOIRE pour pouvoir logger chaque skip.
   const enrollments = await prisma.enrollment.findMany({
-    where,
+    where: {
+      moduleProgresses: { some: { status: { not: 'completed' } } },
+    },
     include: {
       user: { select: { fullName: true, email: true } },
       formation: { select: { title: true } },
+      formationProgress: { select: { progressPercent: true } },
       moduleProgresses: {
-        where: { status: { not: 'completed' }, updatedAt: { lt: threshold } },
+        where: { status: { not: 'completed' } },
         include: { module: { select: { title: true } } },
       },
     },
   });
 
-  return enrollments
-    .filter((e) => e.moduleProgresses.length > 0)
-    .map((e) => ({
+  const eligible: EnrollmentWithContext[] = [];
+  const skipped: SkippedEnrollment[] = [];
+
+  for (const e of enrollments) {
+    const ctx = { enrollmentId: e.id, email: e.user.email, formation: e.formation.title, rule: ruleName };
+
+    // 1) Désinscrit
+    if (filters.excludeUnenrolled && e.status !== 'active') {
+      logger.info('[reminder] SKIP desinscrit', { ...ctx, status: e.status });
+      skipped.push({ enrollmentId: e.id, email: e.user.email, formation: e.formation.title, reason: 'desinscrit', detail: `status=${e.status}` });
+      continue;
+    }
+
+    // 2) Accès clôturé (end_date dépassée)
+    if (filters.excludeExpired && e.endDate <= now) {
+      logger.info('[reminder] SKIP acces cloture', { ...ctx, endDate: e.endDate.toISOString() });
+      skipped.push({ enrollmentId: e.id, email: e.user.email, formation: e.formation.title, reason: 'acces_cloture', detail: `endDate=${e.endDate.toISOString()}` });
+      continue;
+    }
+
+    // 3) Formation terminée (≥ 99%)
+    if (filters.excludeCompleted && e.formationProgress && e.formationProgress.progressPercent >= 99) {
+      logger.info('[reminder] SKIP formation terminee', { ...ctx, progress: e.formationProgress.progressPercent });
+      skipped.push({ enrollmentId: e.id, email: e.user.email, formation: e.formation.title, reason: 'formation_terminee', detail: `progress=${e.formationProgress.progressPercent}%` });
+      continue;
+    }
+
+    // 4) Délai non atteint (aucun module stagnant depuis `delayDays`)
+    const stalled = e.moduleProgresses.filter((mp) => mp.updatedAt < threshold);
+    if (stalled.length === 0) {
+      const latest = e.moduleProgresses.reduce<Date | null>((acc, mp) => (!acc || mp.updatedAt > acc ? mp.updatedAt : acc), null);
+      const daysSince = latest ? Math.floor((Date.now() - latest.getTime()) / 86_400_000) : 0;
+      logger.info('[reminder] SKIP delai non atteint', { ...ctx, delayDays: filters.delayDays, daysSinceLastActivity: daysSince });
+      skipped.push({ enrollmentId: e.id, email: e.user.email, formation: e.formation.title, reason: 'delai_non_atteint', detail: `delai=${filters.delayDays}j, activite il y a ${daysSince}j` });
+      continue;
+    }
+
+    eligible.push({
       id: e.id,
       userId: e.userId,
       formationId: e.formationId,
       user: e.user,
       formation: e.formation,
-      stalledModules: e.moduleProgresses.map((mp) => ({ title: mp.module.title })),
-    }));
+      stalledModules: stalled.map((mp) => ({ title: mp.module.title })),
+    });
+    logger.debug('[reminder] ELIGIBLE', { ...ctx, stalledCount: stalled.length });
+  }
+
+  return { eligible, skipped };
 }
 
 async function hasRecentReminder(enrollmentId: string, ruleId: string, delayDays: number): Promise<boolean> {
@@ -455,37 +511,103 @@ export async function sendReminderFor(
   }
 }
 
-// ─── Job : exécute toutes les règles actives dont sendHour = currentHour ─────
+// ─── Job : exécute les règles actives (filtrées par hour ou toutes) ──────────
 
-export async function runRemindersForHour(currentHour: number): Promise<{ processed: number; sent: number; failed: number; skipped: number }> {
-  const rules = await prisma.reminderRule.findMany({
-    where: { isActive: true, sendHour: currentHour },
-  });
+interface RunDetail {
+  enrollmentId: string;
+  email: string;
+  ruleId: string;
+  ruleName: string;
+  status: 'sent' | 'failed' | 'skipped';
+  error?: string;
+  skippedReason?: string;
+}
+
+interface RunOptions {
+  hour?: number;        // si défini, ne traite que les règles avec sendHour = hour
+  ignoreRecent?: boolean; // si true, ne skip pas les relances déjà envoyées récemment
+}
+
+export async function runReminders(options: RunOptions = {}): Promise<{ processed: number; sent: number; failed: number; skipped: number; details: RunDetail[] }> {
+  const where: any = { isActive: true, archivedAt: null };
+  if (options.hour !== undefined) where.sendHour = options.hour;
+
+  const rules = await prisma.reminderRule.findMany({ where });
 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  const details: RunDetail[] = [];
 
   for (const rule of rules) {
-    const eligible = await findEligibleEnrollments({
-      delayDays: rule.delayDays,
-      excludeCompleted: rule.excludeCompleted,
-      excludeExpired: rule.excludeExpired,
-      excludeUnenrolled: rule.excludeUnenrolled,
-    });
+    logger.info('[reminder] Processing rule', { rule: rule.name, delayDays: rule.delayDays });
+    const { eligible, skipped: preSkipped } = await findEligibleEnrollments(
+      {
+        delayDays: rule.delayDays,
+        excludeCompleted: rule.excludeCompleted,
+        excludeExpired: rule.excludeExpired,
+        excludeUnenrolled: rule.excludeUnenrolled,
+      },
+      rule.name,
+    );
+
+    // Skips remontés par le filtrage amont (délai, exclusions)
+    for (const s of preSkipped) {
+      skipped++;
+      details.push({
+        enrollmentId: s.enrollmentId,
+        email: s.email,
+        ruleId: rule.id,
+        ruleName: rule.name,
+        status: 'skipped',
+        skippedReason: `${s.reason}${s.detail ? ' — ' + s.detail : ''}`,
+      });
+    }
+
     for (const enr of eligible) {
-      if (await hasRecentReminder(enr.id, rule.id, rule.delayDays)) {
+      // Skip anti-doublon : relance déjà envoyée récemment
+      if (!options.ignoreRecent && (await hasRecentReminder(enr.id, rule.id, rule.delayDays))) {
         skipped++;
+        logger.info('[reminder] SKIP deja relance', {
+          enrollmentId: enr.id,
+          email: enr.user.email,
+          formation: enr.formation.title,
+          rule: rule.name,
+          delayDays: rule.delayDays,
+        });
+        details.push({
+          enrollmentId: enr.id,
+          email: enr.user.email,
+          ruleId: rule.id,
+          ruleName: rule.name,
+          status: 'skipped',
+          skippedReason: `deja_relance — dans les ${rule.delayDays} derniers jours`,
+        });
         continue;
       }
+      logger.info('[reminder] SEND', { enrollmentId: enr.id, email: enr.user.email, rule: rule.name });
       const result = await sendReminderFor(enr, rule);
       if (result.status === 'sent') sent++;
       else failed++;
+      details.push({
+        enrollmentId: enr.id,
+        email: enr.user.email,
+        ruleId: rule.id,
+        ruleName: rule.name,
+        status: result.status,
+        error: result.error,
+      });
     }
   }
 
-  logger.info('Reminder hour run summary', { hour: currentHour, rules: rules.length, sent, failed, skipped });
-  return { processed: rules.length, sent, failed, skipped };
+  logger.info('[reminder] Run summary', { hour: options.hour ?? 'all', rules: rules.length, sent, failed, skipped });
+  return { processed: rules.length, sent, failed, skipped, details };
+}
+
+// Alias conservé pour le cron horaire existant
+export async function runRemindersForHour(currentHour: number) {
+  const { processed, sent, failed, skipped } = await runReminders({ hour: currentHour });
+  return { processed, sent, failed, skipped };
 }
 
 // ─── Envoi manuel de test (admin) ────────────────────────────────────────────

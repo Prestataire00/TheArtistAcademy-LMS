@@ -18,6 +18,19 @@ remindersRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
   res.json({ data });
 }));
 
+// POST /api/v1/admin/relances/run-now — déclenche immédiatement l'envoi des relances
+remindersRouter.post('/run-now', asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.runReminders();
+  await logEvent({
+    category: 'admin',
+    action: 'reminder_run_now',
+    userId: req.user!.userId,
+    payload: { sent: result.sent, failed: result.failed, skipped: result.skipped, processed: result.processed },
+    ipAddress: req.ip,
+  });
+  res.json({ data: { sent: result.sent, failed: result.failed, skipped: result.skipped, processed: result.processed, details: result.details } });
+}));
+
 // GET /api/v1/admin/relances/test/:enrollmentId
 remindersRouter.get('/test/:enrollmentId', asyncHandler(async (req: Request, res: Response) => {
   const { enrollmentId } = req.params;
@@ -49,9 +62,10 @@ const ruleCreateSchema = z.object({
 
 const ruleUpdateSchema = ruleCreateSchema.partial();
 
-// GET /api/v1/admin/relances/rules
-remindersRouter.get('/rules', asyncHandler(async (_req: Request, res: Response) => {
-  const data = await service.listRules();
+// GET /api/v1/admin/relances/rules?includeArchived=1
+remindersRouter.get('/rules', asyncHandler(async (req: Request, res: Response) => {
+  const includeArchived = req.query.includeArchived === '1' || req.query.includeArchived === 'true';
+  const data = await service.listRules({ includeArchived });
   res.json({ data });
 }));
 
@@ -73,11 +87,18 @@ remindersRouter.put('/rules/:id', asyncHandler(async (req: Request, res: Respons
   res.json({ data: rule });
 }));
 
-// DELETE /api/v1/admin/relances/rules/:id
-remindersRouter.delete('/rules/:id', asyncHandler(async (req: Request, res: Response) => {
-  await service.deleteRule(req.params.id);
-  await logEvent({ category: 'admin', action: 'reminder_rule_delete', userId: req.user!.userId, entityType: 'reminder_rule', entityId: req.params.id, ipAddress: req.ip });
-  res.status(204).end();
+// POST /api/v1/admin/relances/rules/:id/archive — soft-delete, conserve les logs
+remindersRouter.post('/rules/:id/archive', asyncHandler(async (req: Request, res: Response) => {
+  const rule = await service.archiveRule(req.params.id);
+  await logEvent({ category: 'admin', action: 'reminder_rule_archive', userId: req.user!.userId, entityType: 'reminder_rule', entityId: rule.id, ipAddress: req.ip });
+  res.json({ data: rule });
+}));
+
+// POST /api/v1/admin/relances/rules/:id/unarchive
+remindersRouter.post('/rules/:id/unarchive', asyncHandler(async (req: Request, res: Response) => {
+  const rule = await service.unarchiveRule(req.params.id);
+  await logEvent({ category: 'admin', action: 'reminder_rule_unarchive', userId: req.user!.userId, entityType: 'reminder_rule', entityId: rule.id, ipAddress: req.ip });
+  res.json({ data: rule });
 }));
 
 // ─── Templates CRUD ──────────────────────────────────────────────────────────

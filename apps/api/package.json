@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
@@ -30,6 +30,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "node-cron": "^3.0.3",
+    "resend": "^6.12.2",
     "winston": "^3.13.0",
     "zod": "^3.23.8"
   },

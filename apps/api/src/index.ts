@@ -25,6 +25,7 @@ import { adminRouter } from './modules/admin/admin.router';
 import { adminUsersRouter } from './modules/admin/users.router';
 import { webhooksRouter } from './modules/webhooks/webhooks.router';
 import { dendreoRouter } from './modules/dendreo/dendreo.router';
+import { healthRouter } from './health';
 
 // Jobs
 import { startReminderScheduler } from './jobs/sendReminders.job';
@@ -82,8 +83,8 @@ api.use('/dendreo', dendreoRouter);
 
 app.use('/api/v1', api);
 
-// Health check
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+// Health check (Railway probe)
+app.use(healthRouter);
 
 // ─── Error handler global ─────────────────────────────────────────────────────
 app.use(errorHandler);

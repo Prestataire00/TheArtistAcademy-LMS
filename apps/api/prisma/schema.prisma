@@ -401,21 +401,23 @@ model EventLog {
 // ─── RELANCES EMAIL ───────────────────────────────────────────────────────────
 
 model ReminderRule {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   name               String
-  delayDays          Int      @map("delay_days")
-  sendHour           Int      @default(9) @map("send_hour")
-  templateName       String   @map("template_name")
-  isActive           Boolean  @default(true) @map("is_active")
-  excludeCompleted   Boolean  @default(true) @map("exclude_completed")
-  excludeExpired     Boolean  @default(true) @map("exclude_expired")
-  excludeUnenrolled  Boolean  @default(true) @map("exclude_unenrolled")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  delayDays          Int       @map("delay_days")
+  sendHour           Int       @default(9) @map("send_hour")
+  templateName       String    @map("template_name")
+  isActive           Boolean   @default(true) @map("is_active")
+  excludeCompleted   Boolean   @default(true) @map("exclude_completed")
+  excludeExpired     Boolean   @default(true) @map("exclude_expired")
+  excludeUnenrolled  Boolean   @default(true) @map("exclude_unenrolled")
+  archivedAt         DateTime? @map("archived_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   reminderLogs ReminderLog[]
 
   @@index([templateName])
+  @@index([archivedAt])
   @@map("reminder_rules")
 }
 
