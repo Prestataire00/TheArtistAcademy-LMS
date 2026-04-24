@@ -1,8 +1,8 @@
 {
   "build": { "builder": "NIXPACKS" },
   "deploy": {
-    "startCommand": "node .next/standalone/server.js",
+    "startCommand": "HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node .next/standalone/server.js",
     "healthcheckPath": "/",
-    "healthcheckTimeout": 60
+    "healthcheckTimeout": 300
   }
 }
