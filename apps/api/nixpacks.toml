@@ -1,0 +1,28 @@
+# Nixpacks config pour le service API Railway (monorepo npm, Root Directory = apps/api).
+#
+# Pourquoi ce fichier :
+# - Railway injecte NODE_ENV=production -> `npm i` standard saute les devDependencies
+#   -> tsc et prisma CLI absents -> `npm run build` echoue avec "tsc: not found".
+#   Fix : `--include=dev` pour installer les devDependencies meme en production.
+# - Node 20 (coherent avec apps/web). Node 18 marche aussi pour l'API mais on
+#   standardise sur 20 pour eviter les surprises de compat.
+# - openssl est requis par Prisma (le nixpkgs par defaut l'incluait deja, on le
+#   mentionne explicitement pour le fixer).
+# - `cacheDirectories = []` : meme garde-fou que le web (evite les cache mounts
+#   buildkit qui collisionnent avec tsbuildinfo).
+
+providers = ["node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm-10_x", "openssl"]
+
+[phases.install]
+cmds = ["npm install --include=dev --legacy-peer-deps"]
+cacheDirectories = []
+
+[phases.build]
+cmds = ["npm run build"]
+cacheDirectories = []
