@@ -1,0 +1,23 @@
+# Build artifacts — ne doivent PAS etre dans le contexte Docker/Nixpacks
+# (tsbuildinfo en particulier casse les cache mounts de Nixpacks)
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+.next
+node_modules
+
+# Environnement — jamais dans le build
+.env
+.env.*
+!.env.example
+
+# VCS / IDE
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

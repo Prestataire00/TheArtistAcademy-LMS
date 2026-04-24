@@ -1,16 +1,27 @@
 # Nixpacks config pour le service Web Railway (monorepo npm, Root Directory = apps/web).
-# Force Node 20 (Next 16 exige >= 18.18 — Node 18 par defaut pose des soucis de peer-deps
-# avec react-quill-new). --legacy-peer-deps contourne les conflits peer-deps sans forcer
-# des versions. `npm install` (pas `ci`) parce que le package-lock.json est a la racine
-# du monorepo et donc invisible quand Railway ne copie que apps/web.
+#
+# Objectifs :
+# - Forcer Node 20 (Next 16 exige >= 18.18, Node 18 cause des soucis peer-deps
+#   avec react-quill-new ; on fixe 20 via nixPkgs ET la variable d'env pour
+#   doubler la couche — certains builds cachent l'une ou l'autre).
+# - `npm install --legacy-peer-deps` pour contourner les conflits peer-deps
+#   entre Next 16, React 18 et react-quill-new.
+# - `cacheDirectories = []` pour DESACTIVER les caches buildkit auto-detectes
+#   par Nixpacks (il tente de monter tsconfig.tsbuildinfo comme un cache dir,
+#   buildkit echoue parce que c'est un fichier, pas un dossier).
 
 providers = ["node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
 cmds = ["npm install --legacy-peer-deps"]
+cacheDirectories = []
 
 [phases.build]
 cmds = ["npm run build"]
+cacheDirectories = []
