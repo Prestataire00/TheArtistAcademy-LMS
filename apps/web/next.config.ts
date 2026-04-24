@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   // Rewrites : proxifie les appels API vers le backend Express en dev
   async rewrites() {
     return [

@@ -1,9 +1,28 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { Suspense, useState, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetFallback />}>
+      <ResetPasswordInner />
+    </Suspense>
+  );
+}
+
+function ResetFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-light px-4">
+      <div className="flex items-center gap-3 text-gray-500">
+        <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        Chargement...
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordInner() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token') || '';
 

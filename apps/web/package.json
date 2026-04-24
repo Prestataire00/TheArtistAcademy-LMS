@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "postbuild": "node -e \"const fs=require('fs');const path=require('path');const std=path.join('.next','standalone','apps','web');if(fs.existsSync(std)){fs.cpSync('public',path.join(std,'public'),{recursive:true,force:true});fs.cpSync(path.join('.next','static'),path.join(std,'.next','static'),{recursive:true,force:true});console.log('[postbuild] copied public/ and .next/static/ into standalone');}\"",
     "start": "next start",
     "lint": "next lint"
   },
