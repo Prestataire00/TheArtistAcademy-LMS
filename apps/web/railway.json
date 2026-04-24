@@ -1,7 +1,8 @@
 {
   "build": { "builder": "NIXPACKS" },
   "deploy": {
-    "startCommand": "node .next/standalone/apps/web/server.js",
-    "healthcheckPath": "/"
+    "startCommand": "node .next/standalone/server.js",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 60
   }
 }

@@ -3,6 +3,7 @@
   "deploy": {
     "startCommand": "DIRECT_URL=\"${DIRECT_URL:-$DATABASE_URL}\" npx prisma migrate deploy && node dist/index.js",
     "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE"
   }
 }

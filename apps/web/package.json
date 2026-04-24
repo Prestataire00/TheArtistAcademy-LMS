@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "postbuild": "node -e \"const fs=require('fs');const path=require('path');const std=path.join('.next','standalone','apps','web');if(fs.existsSync(std)){fs.cpSync('public',path.join(std,'public'),{recursive:true,force:true});fs.cpSync(path.join('.next','static'),path.join(std,'.next','static'),{recursive:true,force:true});console.log('[postbuild] copied public/ and .next/static/ into standalone');}\"",
+    "postbuild": "node -e \"const fs=require('fs');const path=require('path');const cands=[path.join('.next','standalone','apps','web'),path.join('.next','standalone')];const base=cands.find(p=>fs.existsSync(path.join(p,'server.js')));if(!base){console.error('[postbuild] server.js introuvable');process.exit(1);}fs.cpSync('public',path.join(base,'public'),{recursive:true,force:true});fs.cpSync(path.join('.next','static'),path.join(base,'.next','static'),{recursive:true,force:true});console.log('[postbuild] copied public/ and .next/static/ into',base);\"",
     "start": "next start",
     "lint": "next lint"
   },
