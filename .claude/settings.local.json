@@ -3,7 +3,13 @@
     "allow": [
       "Bash(taskkill //F //PID 69104)",
       "Bash(npx prisma:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(npx next *)",
+      "Bash(tee /tmp/dev.log)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
