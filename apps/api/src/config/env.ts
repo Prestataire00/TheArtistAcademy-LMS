@@ -5,7 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3001),
   DATABASE_URL: z.string().min(1),
-  DIRECT_URL: z.string().min(1),
+  DIRECT_URL: z.string().optional(),
 
   // JWT interne
   JWT_SECRET: z.string().min(32),
@@ -45,6 +45,12 @@ if (!parsed.success) {
   console.error('❌ Variables d\'environnement invalides :');
   console.error(parsed.error.flatten().fieldErrors);
   process.exit(1);
+}
+
+// Si DIRECT_URL n'est pas fourni (Railway Postgres addon n'injecte que DATABASE_URL),
+// on retombe sur DATABASE_URL pour que prisma migrate deploy fonctionne.
+if (!process.env.DIRECT_URL) {
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
 }
 
 export const env = parsed.data;

@@ -32,6 +32,9 @@ import { startReminderScheduler } from './jobs/sendReminders.job';
 
 const app = express();
 
+// ─── Healthcheck (monté en premier pour que Railway le probe sans dépendre des middlewares) ───
+app.use(healthRouter);
+
 // ─── Middlewares globaux ───────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
@@ -82,9 +85,6 @@ api.use('/webhooks', webhooksRouter);
 api.use('/dendreo', dendreoRouter);
 
 app.use('/api/v1', api);
-
-// Health check (Railway probe)
-app.use(healthRouter);
 
 // ─── Error handler global ─────────────────────────────────────────────────────
 app.use(errorHandler);
