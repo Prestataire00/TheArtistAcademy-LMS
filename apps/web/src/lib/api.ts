@@ -1,14 +1,17 @@
 // Client fetch centralisé.
-// - Ajoute les credentials (cookies httpOnly) pour le flow login admin/trainer
-//   où le cookie 'token' est posé via Set-Cookie sur le domaine web.
-// - Ajoute aussi un header Authorization: Bearer <token> depuis localStorage
-//   pour le flow SSO Dendreo : l'API SSO pose le cookie sur SON domaine
-//   (pas le web), donc le navigateur ne peut pas le renvoyer côté web. Le
-//   token reçu via /sso/dendreo?token=... est stocké dans localStorage et
-//   doit être présenté en header.
-// Sans le header, le serveur tombe sur le cookie d'une session précédente
-// (ex : un admin logué) et renvoie 400 "pas d'inscription active" car
-// l'admin n'a pas d'enrollment sur la formation visée.
+//
+// Stratégie d'auth (simple et robuste) :
+//   - Si localStorage.token existe -> on envoie UNIQUEMENT le header
+//     `Authorization: Bearer <token>` et on omet les cookies (`credentials:omit`).
+//     Ça empêche un cookie résiduel d'une session précédente (ex : trainer
+//     loggé avant le SSO apprenant) d'écraser l'identité explicite du token.
+//   - Sinon (pas de token en localStorage) on retombe sur `credentials:include`
+//     pour le flow login admin/trainer où le cookie `token` est posé via
+//     Set-Cookie sur le domaine web.
+//
+// Le SSO Dendreo pose le token via /sso/dendreo?token=... → localStorage.
+// Le login admin/trainer pose le token via cookie httpOnly + également
+// localStorage côté client (le 1er moyen suffira).
 
 const BASE_URL = '/api/v1';
 
@@ -22,19 +25,25 @@ function readToken(): string | null {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = readToken();
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options?.headers as Record<string, string>) ?? {}),
   };
 
-  const token = readToken();
   if (token && !headers.Authorization) {
     headers.Authorization = `Bearer ${token}`;
   }
 
+  // 'omit' quand on a un token explicite : évite de laisser un cookie
+  // résiduel (autre user) écraser notre identité côté serveur.
+  // 'include' sinon : nécessaire pour le flow login (cookie httpOnly).
+  const credentials: RequestCredentials = token ? 'omit' : 'include';
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    credentials: 'include',
+    credentials,
     headers,
   });
 
