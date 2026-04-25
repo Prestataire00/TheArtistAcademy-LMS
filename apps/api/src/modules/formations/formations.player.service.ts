@@ -7,19 +7,38 @@ import { CompletionStatus } from '@prisma/client';
  * formation, modules, UAs, progression, enrollment.
  */
 export async function getPlayerFormation(userId: string, formationId: string) {
-  // Vérifier enrollment actif
-  const enrollment = await prisma.enrollment.findFirst({
-    where: {
-      userId,
-      formationId,
-      status: 'active',
-      startDate: { lte: new Date() },
-      endDate: { gte: new Date() },
-    },
+  // Lookup d'abord l'enrollment sans filtre date/status pour donner un message
+  // précis selon la cause d'inactivité (sinon "pas d'inscription active" couvre
+  // 4 cas distincts et bloque le diagnostic).
+  const now = new Date();
+  const anyEnrollment = await prisma.enrollment.findFirst({
+    where: { userId, formationId },
+    orderBy: { createdAt: 'desc' },
   });
-  if (!enrollment) {
-    throw new BadRequestError("Vous n'avez pas d'inscription active pour cette formation");
+
+  if (!anyEnrollment) {
+    throw new BadRequestError("Aucune inscription trouvée pour cette formation");
   }
+
+  if (anyEnrollment.status !== 'active') {
+    throw new BadRequestError(
+      `Inscription au statut "${anyEnrollment.status}" — l'accès à la formation n'est pas ouvert`,
+    );
+  }
+
+  if (anyEnrollment.startDate > now) {
+    throw new BadRequestError(
+      `Accès non encore ouvert — débute le ${anyEnrollment.startDate.toISOString().slice(0, 10)}`,
+    );
+  }
+
+  if (anyEnrollment.endDate < now) {
+    throw new BadRequestError(
+      `Accès expiré — terminé le ${anyEnrollment.endDate.toISOString().slice(0, 10)}`,
+    );
+  }
+
+  const enrollment = anyEnrollment;
 
   // Charger la formation complète
   const formation = await prisma.formation.findUnique({
