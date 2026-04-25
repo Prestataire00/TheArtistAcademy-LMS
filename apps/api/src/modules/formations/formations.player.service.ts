@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
 import { CompletionStatus } from '@prisma/client';
+import { logger } from '../../shared/logger';
 
 /**
  * Retourne les données complètes de la formation pour un apprenant :
@@ -17,6 +18,27 @@ export async function getPlayerFormation(userId: string, formationId: string) {
   });
 
   if (!anyEnrollment) {
+    // Diagnostic : logger ce que l'API voit en DB pour ce user
+    const userExists = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, role: true },
+    });
+    const allEnrollmentsForUser = await prisma.enrollment.findMany({
+      where: { userId },
+      select: { id: true, formationId: true, status: true },
+    });
+    const formationExists = await prisma.formation.findUnique({
+      where: { id: formationId },
+      select: { id: true, title: true },
+    });
+    logger.warn('[player] enrollment introuvable — diagnostic', {
+      requestedUserId: userId,
+      requestedFormationId: formationId,
+      userInDb: userExists,
+      formationInDb: formationExists,
+      allEnrollmentsForUserCount: allEnrollmentsForUser.length,
+      allEnrollmentsForUser,
+    });
     throw new BadRequestError("Aucune inscription trouvée pour cette formation");
   }
 
