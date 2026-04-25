@@ -165,17 +165,45 @@ export default function FormationPage() {
   }
 
   if (error || !data) {
+    // Si l'erreur est liée à l'auth (token manquant/invalide), proposer un
+    // retour vers Dendreo (les apprenants n'ont pas de mot de passe LMS,
+    // ils doivent re-passer par le SSO Dendreo pour obtenir un nouveau token).
+    const isAuthError =
+      typeof error === 'string' &&
+      /token|unauthorized|non autoris|expir/i.test(error);
+    const dendreoUrl =
+      typeof document !== 'undefined'
+        ? document.cookie.match(/(?:^|; )dendreo_return_to=([^;]+)/)?.[1]
+        : undefined;
+    const dendreoFallback = process.env.NEXT_PUBLIC_DENDREO_EXTRANET_URL;
+    const dendreoHref = (dendreoUrl ? decodeURIComponent(dendreoUrl) : '') || dendreoFallback;
+
     return (
       <div className="min-h-screen flex items-center justify-center p-8">
         <div className="text-center max-w-md">
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Impossible de charger la formation</h1>
-          <p className="text-gray-500 mb-6">{error || 'Erreur inconnue'}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
-          >
-            Remonter
-          </button>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">
+            {isAuthError ? 'Session expirée' : 'Impossible de charger la formation'}
+          </h1>
+          <p className="text-gray-500 mb-6">
+            {isAuthError
+              ? 'Reconnectez-vous via votre espace Dendreo pour accéder à la formation.'
+              : error || 'Erreur inconnue'}
+          </p>
+          {isAuthError && dendreoHref ? (
+            <a
+              href={dendreoHref}
+              className="inline-block px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+            >
+              Retour à Dendreo
+            </a>
+          ) : (
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+            >
+              Remonter
+            </button>
+          )}
         </div>
       </div>
     );
