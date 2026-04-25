@@ -1,4 +1,5 @@
 // Client fetch centralisé.
+// (redeploy trigger — credentials omit fix bundle)
 //
 // Stratégie d'auth (simple et robuste) :
 //   - Si localStorage.token existe -> on envoie UNIQUEMENT le header
