@@ -32,6 +32,11 @@ import { startReminderScheduler } from './jobs/sendReminders.job';
 
 const app = express();
 
+// Railway/Render mettent un reverse proxy devant l'app : on fait confiance
+// au premier hop pour que req.ip, req.protocol et les cookies secure
+// soient corrects, et pour silencer le warning d'express-rate-limit.
+app.set('trust proxy', 1);
+
 // ─── Healthcheck (monté en premier pour que Railway le probe sans dépendre des middlewares) ───
 app.use(healthRouter);
 
