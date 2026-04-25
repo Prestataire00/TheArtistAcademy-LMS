@@ -19,7 +19,13 @@ declare global {
 }
 
 export function authenticate(req: Request, _res: Response, next: NextFunction) {
-  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  // Authorization header > cookie : un header est explicitement envoyé pour
+  // CETTE requête (ex : Bearer apprenant SSO), alors qu'un cookie peut être
+  // un résidu de session précédente (ex : cookie admin du même navigateur).
+  // Prendre le cookie en priorité provoque des "pas d'inscription active"
+  // quand un admin tente d'ouvrir un lien apprenant SSO dans la même session.
+  const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  const token = headerToken || req.cookies?.token;
 
   if (!token) throw new UnauthorizedError('Token manquant');
 
