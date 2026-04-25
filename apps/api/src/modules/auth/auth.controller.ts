@@ -128,10 +128,16 @@ export async function handleSso(req: Request, res: Response) {
     });
   }
 
-  // Redirect : return_to explicite (override) ou page de relais SSO web
+  // Redirect : return_to explicite (override) ou page de relais SSO web.
+  // L'API et le Web sont sur des domaines distincts (Railway) : tous les
+  // redirects qui pointent vers le Web doivent être ABSOLUS, sinon le
+  // navigateur reste sur le domaine API.
   const explicitReturnTo = req.query.return_to as string | undefined;
   if (explicitReturnTo) {
-    res.redirect(explicitReturnTo);
+    const absoluteReturnTo = /^https?:\/\//i.test(explicitReturnTo)
+      ? explicitReturnTo
+      : `${env.WEB_URL}${explicitReturnTo.startsWith('/') ? '' : '/'}${explicitReturnTo}`;
+    res.redirect(absoluteReturnTo);
     return;
   }
 
@@ -140,7 +146,7 @@ export async function handleSso(req: Request, res: Response) {
     training_id: enrollment.formationId,
     enrolment_id: enrollment.id,
   });
-  res.redirect(`/sso/dendreo?${ssoLandingParams.toString()}`);
+  res.redirect(`${env.WEB_URL}/sso/dendreo?${ssoLandingParams.toString()}`);
 }
 
 export async function getSsoStatus(_req: Request, res: Response) {
