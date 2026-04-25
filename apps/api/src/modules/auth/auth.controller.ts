@@ -1,38 +1,103 @@
 import { Request, Response } from 'express';
-import { validateDendreoToken, upsertUserAndEnrollment, generateInternalJwt } from './auth.service';
+import {
+  validateDendreoToken,
+  findUserForSso,
+  findEnrollmentForSso,
+  markDendreoTokenConsumed,
+  generateInternalJwt,
+} from './auth.service';
 import { logEvent } from '../../shared/eventLog.service';
 import { env } from '../../config/env';
 import { BadRequestError } from '../../shared/errors';
 
 /**
  * GET /auth/sso?jwt=xxx&return_to=...&dendreo_return_to=...
- * Entrée SSO Dendreo : valide le JWT HS256, crée session, redirige.
+ *
+ * Séquence stricte (le SSO ne crée jamais de user/enrollment) :
+ *   1. validateDendreoToken : vérifie signature HS256 + iat<=5min + jti pas
+ *      déjà consommé (lecture seule sur la table jti).
+ *   2. findUserForSso     : lookup user. 404 USER_NOT_FOUND si absent (le
+ *      compte doit être créé en amont par webhook user.created).
+ *   3. findEnrollmentForSso : lookup enrollment. 403 ENROLLMENT_NOT_FOUND
+ *      si le user n'est pas inscrit à la formation cible.
+ *   4. markDendreoTokenConsumed : seulement maintenant on brûle le jti.
+ *   5. generateInternalJwt + cookie + redirect /sso/dendreo.
+ *
+ * Codes HTTP retournés (via errorHandler global qui mappe AppError) :
+ *   - 401 UNAUTHORIZED         JWT invalide/expiré/déjà consommé
+ *   - 404 USER_NOT_FOUND       user absent en DB
+ *   - 403 ENROLLMENT_NOT_FOUND user non inscrit
+ *   - 500 INTERNAL_ERROR       erreur DB inattendue (stack trace dans logs)
  */
 export async function handleSso(req: Request, res: Response) {
-  const rawToken = req.query.jwt as string || req.body.token as string || req.query.token as string;
+  const rawToken =
+    (req.query.jwt as string) ||
+    (req.body?.token as string) ||
+    (req.query.token as string);
 
   if (!rawToken) throw new BadRequestError('Token SSO manquant');
 
+  // Étape 1 : validation pure du JWT (pas de write DB)
   let dendreoPayload;
-  let upserted;
   try {
-    // 1. Valider le JWT Dendreo (HS256)
     dendreoPayload = await validateDendreoToken(rawToken);
-    // 2. Upsert User + Enrollment
-    upserted = await upsertUserAndEnrollment(dendreoPayload);
   } catch (err: any) {
     await logEvent({
       category: 'sso',
       action: 'sso_failed',
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
-      payload: { error: err?.message ?? 'unknown', email: dendreoPayload?.email },
+      payload: { stage: 'validate_token', error: err?.message ?? 'unknown' },
     });
     throw err;
   }
-  const { user, enrollment } = upserted;
 
-  // 3. Logger l'événement SSO
+  // Étape 2 : lookup user (404 si absent)
+  let user;
+  try {
+    user = await findUserForSso(dendreoPayload);
+  } catch (err: any) {
+    await logEvent({
+      category: 'sso',
+      action: 'sso_failed',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      payload: {
+        stage: 'find_user',
+        code: err?.code,
+        error: err?.message,
+        email: dendreoPayload.email,
+        user_id: dendreoPayload.user_id ?? dendreoPayload.sub,
+      },
+    });
+    throw err;
+  }
+
+  // Étape 3 : lookup enrollment (403 si absent)
+  let enrollment;
+  try {
+    enrollment = await findEnrollmentForSso(user, dendreoPayload);
+  } catch (err: any) {
+    await logEvent({
+      category: 'sso',
+      action: 'sso_failed',
+      userId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      payload: {
+        stage: 'find_enrollment',
+        code: err?.code,
+        error: err?.message,
+        training_id: dendreoPayload.training_id ?? dendreoPayload.formation_id,
+      },
+    });
+    throw err;
+  }
+
+  // Étape 4 : marquer le jti consommé maintenant que tout est OK
+  await markDendreoTokenConsumed(dendreoPayload);
+
+  // Étape 5 : log success + cookies + redirect
   await logEvent({
     category: 'sso',
     action: 'sso_success',
@@ -42,7 +107,6 @@ export async function handleSso(req: Request, res: Response) {
     userAgent: req.headers['user-agent'],
   });
 
-  // 4. Générer JWT interne + cookie httpOnly
   const internalToken = generateInternalJwt(user);
   const cookieOpts = {
     httpOnly: true,
@@ -53,20 +117,18 @@ export async function handleSso(req: Request, res: Response) {
 
   res.cookie('token', internalToken, cookieOpts);
 
-  // 5. Stocker dendreo_return_to en cookie pour le bouton "Mes formations"
-  const dendreoReturnTo = req.query.dendreo_return_to as string;
+  // Cookie dendreo_return_to lisible côté client (bouton "Retour Dendreo")
+  const dendreoReturnTo = req.query.dendreo_return_to as string | undefined;
   if (dendreoReturnTo) {
     res.cookie('dendreo_return_to', dendreoReturnTo, {
-      httpOnly: false, // accessible côté client pour le bouton "Mes formations"
+      httpOnly: false,
       secure: env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 8 * 60 * 60 * 1000,
     });
   }
 
-  // 6. Rediriger vers return_to (override explicite) sinon vers la page web
-  // de relais SSO. Le web (page /sso/dendreo) finit la chaîne en plaçant
-  // le token côté navigateur puis renvoie l'apprenant sur sa formation.
+  // Redirect : return_to explicite (override) ou page de relais SSO web
   const explicitReturnTo = req.query.return_to as string | undefined;
   if (explicitReturnTo) {
     res.redirect(explicitReturnTo);
@@ -82,6 +144,5 @@ export async function handleSso(req: Request, res: Response) {
 }
 
 export async function getSsoStatus(_req: Request, res: Response) {
-  // TODO: Phase 2 — retourner les logs SSO récents et stats
   res.json({ status: 'ok', message: 'SSO status endpoint - à implémenter en Phase 2' });
 }
