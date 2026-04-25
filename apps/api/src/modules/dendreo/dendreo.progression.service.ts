@@ -5,7 +5,18 @@ import { logEvent } from '../../shared/eventLog.service';
 import { logger } from '../../shared/logger';
 
 const DENDREO_PROGRESSION_URL = 'https://hooks.dendreo.com/lms-progression';
-const RETRY_DELAYS_MS = [60_000, 120_000, 300_000, 600_000, 1_800_000]; // 1mn, 2mn, 5mn, 10mn, 30mn
+// Retry exponentiel : 1mn, 2mn, 5mn, 10mn, 30mn, 1h, 2h, 6h, 12h
+const RETRY_DELAYS_MS = [
+  60_000,
+  120_000,
+  300_000,
+  600_000,
+  1_800_000,
+  3_600_000,
+  7_200_000,
+  21_600_000,
+  43_200_000,
+];
 
 interface ProgressionPayload {
   event: 'enrolment.progress';
@@ -28,7 +39,8 @@ interface ProgressionPayload {
  * Appelé après chaque mise à jour de progression.
  */
 export async function sendProgressionToDendreo(enrollmentId: string): Promise<void> {
-  if (!env.DENDREO_WEBHOOK_SECRET || !env.DENDREO_TENANT_ID) {
+  const webhookSecret = env.DENDREO_SIGNATURE_KEY || env.DENDREO_WEBHOOK_SECRET;
+  if (!webhookSecret || !env.DENDREO_TENANT_ID) {
     logger.debug('Dendreo progression webhook skipped: missing config');
     return;
   }
@@ -51,7 +63,7 @@ export async function sendProgressionToDendreo(enrollmentId: string): Promise<vo
   const payload: ProgressionPayload = {
     event: 'enrolment.progress',
     timestamp: new Date().toISOString(),
-    lms_name: 'The Artist Academy',
+    lms_name: env.DENDREO_LMS_NAME,
     tenant_id: env.DENDREO_TENANT_ID,
     data: {
       enrolment_id: enrollment.dendreoEnrolmentId,
@@ -79,8 +91,9 @@ async function sendWithRetry(
   attempt: number,
 ): Promise<void> {
   const body = JSON.stringify(payload);
+  const webhookSecret = env.DENDREO_SIGNATURE_KEY || env.DENDREO_WEBHOOK_SECRET;
   const signature = crypto
-    .createHmac('sha256', env.DENDREO_WEBHOOK_SECRET)
+    .createHmac('sha256', webhookSecret)
     .update(body)
     .digest('hex');
 

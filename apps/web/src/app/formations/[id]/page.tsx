@@ -95,6 +95,34 @@ function LockIcon() {
   );
 }
 
+// Lien "Retour à Dendreo" / "Mes formations". Si l'apprenant est arrivé via
+// SSO Dendreo, le cookie 'dendreo_return_to' a été placé par l'API : on
+// l'utilise. Sinon on retombe sur l'extranet Dendreo configuré en .env.
+function DendreoReturnLink() {
+  const [returnTo, setReturnTo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const match = document.cookie.match(/(?:^|; )dendreo_return_to=([^;]+)/);
+    if (match) {
+      try { setReturnTo(decodeURIComponent(match[1])); } catch { /* ignore */ }
+    }
+  }, []);
+
+  const fallback = process.env.NEXT_PUBLIC_DENDREO_EXTRANET_URL;
+  const href = returnTo || fallback;
+  if (!href) return null;
+
+  return (
+    <a
+      href={href}
+      className="text-sm text-dark-muted hover:text-brand-600 transition-colors py-2 -my-2"
+    >
+      {returnTo ? 'Retour à Dendreo' : 'Mes formations'}
+    </a>
+  );
+}
+
 function StatusBadge({ status }: { status: CompletionStatus }) {
   const styles = {
     not_started: 'bg-gray-100 text-gray-600',
@@ -164,12 +192,7 @@ export default function FormationPage() {
           {/* Top bar avec logo + lien Dendreo */}
           <div className="flex items-center justify-between mb-3">
             <img src="/logo-dark.png" alt="The Artist Academy" className="h-10 sm:h-12 w-auto" />
-            <a
-              href={process.env.NEXT_PUBLIC_DENDREO_EXTRANET_URL || '#'}
-              className="text-sm text-dark-muted hover:text-brand-600 transition-colors py-2 -my-2"
-            >
-              Mes formations
-            </a>
+            <DendreoReturnLink />
           </div>
 
           {/* Titre + CTA — stack sur mobile pour garder le CTA pleine largeur */}

@@ -1,32 +1,45 @@
 import { Router, Request, Response } from 'express';
 import { verifyDendreoWebhookSignature, verifyDendreoApiKey } from './dendreo.middleware';
-import { handleUserWebhook, handleEnrolmentWebhook } from './dendreo.webhooks.service';
+import {
+  handleUserWebhook,
+  handleEnrolmentWebhook,
+  handleSessionWebhook,
+} from './dendreo.webhooks.service';
 import { asyncHandler } from '../../shared/errors';
 import { prisma } from '../../config/database';
 
 export const dendreoRouter = Router();
 
 // ─── Webhooks entrants Dendreo → LMS ─────────────────────────────────────────
+//
+// La nouvelle spec Dendreo cible les routes /users, /sessions, /enrolments
+// (sans le préfixe /webhooks). On expose les nouveaux paths comme canoniques
+// et on garde les anciens en alias pour ne pas casser une intégration en
+// cours de bascule.
 
-// POST /api/v1/dendreo/webhooks/users — user.created
-dendreoRouter.post(
-  '/webhooks/users',
-  verifyDendreoWebhookSignature,
-  asyncHandler(async (req: Request, res: Response) => {
-    const result = await handleUserWebhook(req.body);
-    res.json(result);
-  }),
-);
+const userHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await handleUserWebhook(req.body);
+  res.json(result);
+});
 
-// POST /api/v1/dendreo/webhooks/enrolments — enrolment.created / updated / deleted
-dendreoRouter.post(
-  '/webhooks/enrolments',
-  verifyDendreoWebhookSignature,
-  asyncHandler(async (req: Request, res: Response) => {
-    const result = await handleEnrolmentWebhook(req.body);
-    res.json(result);
-  }),
-);
+const sessionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await handleSessionWebhook(req.body);
+  res.json(result);
+});
+
+const enrolmentHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await handleEnrolmentWebhook(req.body);
+  res.json(result);
+});
+
+// Routes canoniques (nouvelle spec)
+dendreoRouter.post('/users', verifyDendreoWebhookSignature, userHandler);
+dendreoRouter.post('/sessions', verifyDendreoWebhookSignature, sessionHandler);
+dendreoRouter.post('/enrolments', verifyDendreoWebhookSignature, enrolmentHandler);
+
+// Aliases historiques (rétrocompat — ancien code Dendreo qui pointe encore ici)
+dendreoRouter.post('/webhooks/users', verifyDendreoWebhookSignature, userHandler);
+dendreoRouter.post('/webhooks/enrolments', verifyDendreoWebhookSignature, enrolmentHandler);
 
 // ─── Pull Trainings (Dendreo appelle pour lister les formations) ─────────────
 

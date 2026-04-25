@@ -12,8 +12,13 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('8h'),
 
   // SSO Dendreo (HS256 — secret partagé)
+  // DENDREO_SIGNATURE_KEY : nouvelle var unifiée (HMAC webhooks + JWT SSO).
+  // DENDREO_JWT_SECRET / DENDREO_WEBHOOK_SECRET : conservées pour rétrocompat ;
+  // si SIGNATURE_KEY est défini, il est préféré.
+  DENDREO_SIGNATURE_KEY: z.string().default(''),
   DENDREO_JWT_SECRET: z.string().default(''),
   DENDREO_JWT_EXPIRY_TOLERANCE_SECONDS: z.coerce.number().default(30),
+  DENDREO_LMS_NAME: z.string().default('TAALMS'),
 
   // Supabase
   SUPABASE_URL: z.string().url().default('http://localhost'),

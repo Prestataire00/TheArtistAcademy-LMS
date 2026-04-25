@@ -64,9 +64,21 @@ export async function handleSso(req: Request, res: Response) {
     });
   }
 
-  // 6. Rediriger vers return_to (formation ciblée) ou page par défaut
-  const returnTo = req.query.return_to as string || `/formations/${enrollment.formationId}`;
-  res.redirect(returnTo);
+  // 6. Rediriger vers return_to (override explicite) sinon vers la page web
+  // de relais SSO. Le web (page /sso/dendreo) finit la chaîne en plaçant
+  // le token côté navigateur puis renvoie l'apprenant sur sa formation.
+  const explicitReturnTo = req.query.return_to as string | undefined;
+  if (explicitReturnTo) {
+    res.redirect(explicitReturnTo);
+    return;
+  }
+
+  const ssoLandingParams = new URLSearchParams({
+    token: internalToken,
+    training_id: enrollment.formationId,
+    enrolment_id: enrollment.id,
+  });
+  res.redirect(`/sso/dendreo?${ssoLandingParams.toString()}`);
 }
 
 export async function getSsoStatus(_req: Request, res: Response) {

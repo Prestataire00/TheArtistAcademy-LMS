@@ -163,9 +163,32 @@ model Formation {
   trainer                   User?       @relation("TrainerFormations", fields: [trainerId], references: [id])
   modules                   Module[]
   enrollments               Enrollment[]
+  dendreoSessions           DendreoSession[]
 
   @@index([trainerId])
   @@map("formations")
+}
+
+// ─── SESSIONS DENDREO ─────────────────────────────────────────────────────────
+// Mapping entre les sessions Dendreo (entité métier côté TMS) et nos formations
+// LMS. Une session porte des dates et un nom ; les enrollments référencent
+// session_id Dendreo via Enrollment.dendreoSessionId.
+
+model DendreoSession {
+  id          String   @id @default(cuid())
+  formationId String   @map("formation_id")
+  externalId  String   @unique @map("external_id")  // session_id Dendreo
+  name        String?
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  tmsOrigin   String   @default("dendreo") @map("tms_origin")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  formation   Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+
+  @@index([formationId])
+  @@map("dendreo_sessions")
 }
 
 model Module {

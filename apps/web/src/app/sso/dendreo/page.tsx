@@ -3,27 +3,30 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-// Ancienne route SSO (compat). On garde cette page comme alias de /sso/dendreo
-// au cas où des liens externes pointent encore ici. Comportement identique :
-// stocke le token, redirige vers la formation.
+// Page de relais SSO Dendreo. L'API redirige ici avec :
+//   /sso/dendreo?token=xxx&training_id=xxx&enrolment_id=xxx
+// On stocke le token côté navigateur (localStorage, lu par lib/api.ts) puis
+// on redirige immédiatement vers /formations/[id] sans afficher de UI
+// intermédiaire (le 'Connexion...' n'est qu'un fallback si JS lent).
 
-export default function AuthSsoPage() {
+export default function SsoDendreoPage() {
   return (
     <Suspense fallback={null}>
-      <AuthSsoInner />
+      <SsoDendreoInner />
     </Suspense>
   );
 }
 
-function AuthSsoInner() {
+function SsoDendreoInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const token = searchParams.get('token') ?? searchParams.get('jwt');
+    const token = searchParams.get('token');
     const trainingId = searchParams.get('training_id');
 
-    if (!token) {
+    if (!token || !trainingId) {
+      // Pas de token = arrivée directe non autorisée -> retour login.
       router.replace('/login');
       return;
     }
@@ -31,10 +34,11 @@ function AuthSsoInner() {
     try {
       localStorage.setItem('token', token);
     } catch {
-      /* ignore */
+      // Si localStorage est désactivé, on continue : le cookie côté API
+      // (set par GET /auth/sso) pourra encore servir si même domaine.
     }
 
-    router.replace(trainingId ? `/formations/${trainingId}` : '/');
+    router.replace(`/formations/${trainingId}`);
   }, [router, searchParams]);
 
   return (

@@ -14,6 +14,9 @@ export const authRouter = Router();
 // GET /api/v1/auth/sso?jwt=xxx&return_to=...&dendreo_return_to=...
 authRouter.get('/sso', ssoRateLimiter, asyncHandler(handleSso));
 
+// Alias canonique nouvelle spec — pointe sur le même handler
+authRouter.get('/dendreo-sso', ssoRateLimiter, asyncHandler(handleSso));
+
 // POST /api/v1/auth/login — Connexion email + mot de passe (trainer / admin)
 authRouter.post('/login', loginRateLimiter, asyncHandler(handleLogin));
 

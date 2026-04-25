@@ -14,7 +14,9 @@ export function verifyDendreoWebhookSignature(req: Request, _res: Response, next
     throw new UnauthorizedError('Signature webhook manquante');
   }
 
-  if (!env.DENDREO_WEBHOOK_SECRET) {
+  // Préférer DENDREO_SIGNATURE_KEY (nouvelle var unifiée), fallback sur DENDREO_WEBHOOK_SECRET
+  const webhookSecret = env.DENDREO_SIGNATURE_KEY || env.DENDREO_WEBHOOK_SECRET;
+  if (!webhookSecret) {
     throw new UnauthorizedError('Configuration webhook Dendreo manquante');
   }
 
@@ -24,7 +26,7 @@ export function verifyDendreoWebhookSignature(req: Request, _res: Response, next
   }
 
   const expected = crypto
-    .createHmac('sha256', env.DENDREO_WEBHOOK_SECRET)
+    .createHmac('sha256', webhookSecret)
     .update(rawBody)
     .digest('hex');
 

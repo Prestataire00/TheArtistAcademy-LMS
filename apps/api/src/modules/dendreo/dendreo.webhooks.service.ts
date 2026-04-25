@@ -1,16 +1,28 @@
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/database';
 import { logEvent } from '../../shared/eventLog.service';
 import { BadRequestError, NotFoundError } from '../../shared/errors';
 import { logger } from '../../shared/logger';
+import { sendProgressionToDendreo } from './dendreo.progression.service';
 
 // ─── Users webhook ───────────────────────────────────────────────────────────
 
 interface UserWebhookPayload {
   event: 'user.created';
+  timestamp?: string;
+  tenant_id?: string;
   data: {
-    id: string;         // id Participant Dendreo (external_id)
+    // Nouvelle spec : firstname/lastname séparés, password hashé, external_id
+    firstname?: string;
+    lastname?: string;
+    password?: string;
+    send_credentials?: boolean;
+    tms_origin?: string;
+    external_id?: string;
+    // Ancien format compat (full_name + id)
+    id?: string;
+    full_name?: string;
     email: string;
-    full_name: string;
   };
 }
 
@@ -19,27 +31,34 @@ export async function handleUserWebhook(payload: UserWebhookPayload) {
     throw new BadRequestError(`Événement non supporté: ${payload.event}`);
   }
 
-  const { id: externalId, email, full_name } = payload.data;
+  const d = payload.data;
+  const externalId = d.external_id ?? d.id;
+  const fullName = d.full_name ?? [d.firstname, d.lastname].filter(Boolean).join(' ').trim();
+  const tmsOrigin = d.tms_origin ?? 'dendreo';
 
-  if (!email || !full_name) {
-    throw new BadRequestError('email et full_name sont requis');
+  if (!d.email || !fullName) {
+    throw new BadRequestError('email et nom complet (firstname+lastname ou full_name) sont requis');
   }
 
-  // Créer ou retrouver l'apprenant par email
+  // Hash le password si fourni (nouvelle spec)
+  const passwordHash = d.password ? await bcrypt.hash(d.password, 12) : undefined;
+
   const user = await prisma.user.upsert({
-    where: { email },
+    where: { email: d.email },
     update: {
-      fullName: full_name,
+      fullName,
       externalId,
-      tmsOrigin: 'dendreo',
+      tmsOrigin,
       isActive: true,
+      ...(passwordHash ? { passwordHash } : {}),
     },
     create: {
-      email,
-      fullName: full_name,
+      email: d.email,
+      fullName,
       externalId,
-      tmsOrigin: 'dendreo',
+      tmsOrigin,
       role: 'learner',
+      ...(passwordHash ? { passwordHash } : {}),
     },
   });
 
@@ -49,37 +68,129 @@ export async function handleUserWebhook(payload: UserWebhookPayload) {
     userId: user.id,
     entityType: 'user',
     entityId: user.id,
-    payload: { externalId, email },
+    payload: { externalId, email: d.email },
   });
 
-  logger.info('Dendreo webhook: user created/updated', { userId: user.id, email });
+  logger.info('Dendreo webhook: user created/updated', { userId: user.id, email: d.email });
 
   return { user_id: user.id };
+}
+
+// ─── Sessions webhook ────────────────────────────────────────────────────────
+
+interface SessionWebhookPayload {
+  event: 'session.created' | 'session.updated' | 'session.deleted';
+  timestamp?: string;
+  tenant_id?: string;
+  data: {
+    training_id: string;
+    session_id?: string;     // utilisé pour update/delete
+    external_id?: string;    // alias session_id si Dendreo l'envoie ainsi
+    start_date?: string;
+    end_date?: string;
+    tms_origin?: string;
+    name?: string;
+  };
+}
+
+export async function handleSessionWebhook(payload: SessionWebhookPayload) {
+  const { event, data } = payload;
+  const externalId = data.session_id ?? data.external_id;
+
+  if (event === 'session.deleted') {
+    if (!externalId) throw new BadRequestError('session_id requis pour delete');
+    const existing = await prisma.dendreoSession.findUnique({ where: { externalId } });
+    if (!existing) throw new NotFoundError(`Session ${externalId}`);
+    await prisma.dendreoSession.delete({ where: { externalId } });
+    await logEvent({
+      category: 'webhook',
+      action: 'session.deleted',
+      entityType: 'dendreo_session',
+      entityId: existing.id,
+      payload: { externalId },
+    });
+    return { session_id: existing.id };
+  }
+
+  if (event !== 'session.created' && event !== 'session.updated') {
+    throw new BadRequestError(`Événement non supporté: ${event}`);
+  }
+
+  if (!data.training_id || !data.start_date || !data.end_date || !externalId) {
+    throw new BadRequestError('training_id, session_id, start_date et end_date sont requis');
+  }
+
+  const formation = await prisma.formation.findUnique({ where: { id: data.training_id } });
+  if (!formation) {
+    throw new NotFoundError(`Training ${data.training_id}`);
+  }
+
+  const startDate = new Date(data.start_date);
+  const endDate = new Date(data.end_date);
+  const tmsOrigin = data.tms_origin ?? 'dendreo';
+
+  const session = await prisma.dendreoSession.upsert({
+    where: { externalId },
+    update: {
+      formationId: data.training_id,
+      name: data.name ?? null,
+      startDate,
+      endDate,
+      tmsOrigin,
+    },
+    create: {
+      formationId: data.training_id,
+      externalId,
+      name: data.name ?? null,
+      startDate,
+      endDate,
+      tmsOrigin,
+    },
+  });
+
+  await logEvent({
+    category: 'webhook',
+    action: event,
+    entityType: 'dendreo_session',
+    entityId: session.id,
+    payload: { externalId, trainingId: data.training_id },
+  });
+
+  logger.info(`Dendreo webhook: ${event}`, { sessionId: session.id, externalId });
+
+  return { session_id: session.id };
 }
 
 // ─── Enrolments webhook ──────────────────────────────────────────────────────
 
 interface EnrolmentWebhookPayload {
   event: 'enrolment.created' | 'enrolment.updated' | 'enrolment.deleted';
+  timestamp?: string;
+  tenant_id?: string;
   data: {
-    enrolment_id: string;
-    training_id: string;   // = formationId LMS
+    enrolment_id?: string;
+    training_id: string;
     session_id?: string;
-    start_date: string;    // ISO date
-    end_date: string;      // ISO date
-    user_id: string;       // LMS user_id
+    user_id: string;
+    start_date: string;
+    end_date: string;
+    send_notification?: boolean;
+    tms_origin?: string;
+    external_id?: string;
   };
 }
 
 export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
   const { event, data } = payload;
+  const dendreoEnrolmentId = data.enrolment_id ?? data.external_id;
 
-  if (!data.enrolment_id || !data.user_id) {
-    throw new BadRequestError('enrolment_id et user_id sont requis');
+  if (!data.user_id) {
+    throw new BadRequestError('user_id est requis');
   }
 
   if (event === 'enrolment.deleted') {
-    return handleEnrolmentDeleted(data.enrolment_id);
+    if (!dendreoEnrolmentId) throw new BadRequestError('enrolment_id requis pour delete');
+    return handleEnrolmentDeleted(dendreoEnrolmentId);
   }
 
   if (event !== 'enrolment.created' && event !== 'enrolment.updated') {
@@ -90,43 +201,76 @@ export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
     throw new BadRequestError('training_id, start_date et end_date sont requis');
   }
 
-  // Vérifier que la formation existe
   const formation = await prisma.formation.findUnique({ where: { id: data.training_id } });
   if (!formation) {
-    throw new NotFoundError(`Formation ${data.training_id}`);
+    throw new NotFoundError(`Training ${data.training_id}`);
   }
 
-  // Vérifier que l'utilisateur existe
   const user = await prisma.user.findUnique({ where: { id: data.user_id } });
   if (!user) {
-    throw new NotFoundError(`Utilisateur ${data.user_id}`);
+    throw new NotFoundError(`User ${data.user_id}`);
   }
 
   const startDate = new Date(data.start_date);
   const endDate = new Date(data.end_date);
   const now = new Date();
   const status = now < startDate ? 'future' : now > endDate ? 'closed' : 'active';
+  const tmsOrigin = data.tms_origin ?? 'dendreo';
 
-  const enrollment = await prisma.enrollment.upsert({
-    where: { dendreoEnrolmentId: data.enrolment_id },
-    update: {
-      formationId: data.training_id,
-      dendreoSessionId: data.session_id,
-      startDate,
-      endDate,
-      status,
-    },
-    create: {
-      userId: data.user_id,
-      formationId: data.training_id,
-      dendreoEnrolmentId: data.enrolment_id,
-      dendreoSessionId: data.session_id,
-      tmsOrigin: 'dendreo',
-      startDate,
-      endDate,
-      status,
-    },
-  });
+  let enrollment;
+  let alreadyExisted = false;
+
+  if (dendreoEnrolmentId) {
+    const existing = await prisma.enrollment.findUnique({
+      where: { dendreoEnrolmentId },
+    });
+    alreadyExisted = !!existing;
+
+    enrollment = await prisma.enrollment.upsert({
+      where: { dendreoEnrolmentId },
+      update: {
+        formationId: data.training_id,
+        dendreoSessionId: data.session_id ?? null,
+        startDate,
+        endDate,
+        status,
+      },
+      create: {
+        userId: data.user_id,
+        formationId: data.training_id,
+        dendreoEnrolmentId,
+        dendreoSessionId: data.session_id ?? null,
+        tmsOrigin,
+        startDate,
+        endDate,
+        status,
+      },
+    });
+  } else {
+    // Pas de dendreoEnrolmentId fourni : on crée sans contrainte unique côté Dendreo.
+    // On évite le doublon en cherchant un enrollment existant pour ce couple (user, formation).
+    const existing = await prisma.enrollment.findFirst({
+      where: { userId: data.user_id, formationId: data.training_id },
+    });
+    alreadyExisted = !!existing;
+
+    enrollment = existing
+      ? await prisma.enrollment.update({
+          where: { id: existing.id },
+          data: { startDate, endDate, status, dendreoSessionId: data.session_id ?? null },
+        })
+      : await prisma.enrollment.create({
+          data: {
+            userId: data.user_id,
+            formationId: data.training_id,
+            dendreoSessionId: data.session_id ?? null,
+            tmsOrigin,
+            startDate,
+            endDate,
+            status,
+          },
+        });
+  }
 
   await logEvent({
     category: 'webhook',
@@ -135,8 +279,13 @@ export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
     enrollmentId: enrollment.id,
     entityType: 'enrollment',
     entityId: enrollment.id,
-    payload: { dendreoEnrolmentId: data.enrolment_id, trainingId: data.training_id },
+    payload: { dendreoEnrolmentId, trainingId: data.training_id },
   });
+
+  // Spec : si l'enrolment existait déjà sur enrolment.created -> renvoyer la progression
+  if (event === 'enrolment.created' && alreadyExisted) {
+    sendProgressionToDendreo(enrollment.id).catch(() => {});
+  }
 
   logger.info(`Dendreo webhook: ${event}`, { enrollmentId: enrollment.id });
 
@@ -144,7 +293,6 @@ export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
 }
 
 async function handleEnrolmentDeleted(dendreoEnrolmentId: string) {
-  // Désactiver l'accès sans supprimer la progression
   const enrollment = await prisma.enrollment.findUnique({
     where: { dendreoEnrolmentId },
   });

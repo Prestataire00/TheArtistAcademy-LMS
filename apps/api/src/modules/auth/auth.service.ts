@@ -27,12 +27,14 @@ export interface DendreoJwtPayload {
 export async function validateDendreoToken(rawToken: string): Promise<DendreoJwtPayload> {
   let payload: DendreoJwtPayload;
 
-  if (!env.DENDREO_JWT_SECRET) {
+  // Préférer DENDREO_SIGNATURE_KEY (nouvelle var unifiée), fallback sur DENDREO_JWT_SECRET
+  const ssoSecret = env.DENDREO_SIGNATURE_KEY || env.DENDREO_JWT_SECRET;
+  if (!ssoSecret) {
     throw new UnauthorizedError('Configuration SSO Dendreo manquante');
   }
 
   try {
-    payload = jwt.verify(rawToken, env.DENDREO_JWT_SECRET, {
+    payload = jwt.verify(rawToken, ssoSecret, {
       algorithms: ['HS256'],
       clockTolerance: env.DENDREO_JWT_EXPIRY_TOLERANCE_SECONDS,
     }) as DendreoJwtPayload;

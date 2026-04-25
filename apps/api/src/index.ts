@@ -46,7 +46,8 @@ app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(express.json({
   verify: (req: any, _res, buf) => {
     // Conserver le body brut pour la vérification HMAC des webhooks Dendreo
-    if (req.url?.includes('/dendreo/webhooks')) {
+    // (anciens path /dendreo/webhooks/* + nouveaux /dendreo/users, /sessions, /enrolments)
+    if (req.url?.includes('/dendreo/')) {
       req.rawBody = buf;
     }
   },
