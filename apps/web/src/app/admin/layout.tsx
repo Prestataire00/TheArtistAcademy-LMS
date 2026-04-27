@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { ToastProvider } from '@/components/admin/ToastContext';
+import { LogoutButton } from '@/components/LogoutButton';
 
 const navItems = [
   { href: '/admin', label: 'Tableau de bord', exact: true },
@@ -81,11 +82,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* ─── Desktop sidebar ──────────────────────────────────────────── */}
-      <aside className="hidden md:block w-64 bg-dark text-white p-6 flex-shrink-0">
+      <aside className="hidden md:flex md:flex-col w-64 bg-dark text-white p-6 flex-shrink-0">
         <a href="/admin" className="block mb-8">
           <img src="/logo-light.png" alt="The Artist Academy" className="h-20 w-auto" />
         </a>
-        {navLinks()}
+        <div className="flex-1">{navLinks()}</div>
+        <LogoutButton className="mt-6 w-full px-3 py-2 text-sm text-dark-muted hover:text-white hover:bg-white/5 rounded-lg text-left transition-colors" />
       </aside>
 
       {/* ─── Mobile drawer + backdrop ─────────────────────────────────── */}
@@ -116,6 +118,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </button>
             </div>
             {navLinks(() => setDrawerOpen(false))}
+            <LogoutButton className="mt-6 w-full px-3 py-3 text-sm text-dark-muted hover:text-white hover:bg-white/5 rounded-lg text-left transition-colors min-h-[44px]" />
           </aside>
         </div>
       )}
