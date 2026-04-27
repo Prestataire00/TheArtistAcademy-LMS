@@ -21,6 +21,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Purge un éventuel token résiduel d'une session précédente (ex : SSO
+      // apprenant testé avant). Sans ça, api.ts enverrait l'ancien Bearer.
+      try { window.localStorage.removeItem('token'); } catch {}
+
       const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         credentials: 'include',
@@ -32,6 +36,12 @@ export default function LoginPage() {
 
       if (!res.ok) {
         throw new Error(data?.error?.message || `Erreur ${res.status}`);
+      }
+
+      // Stocker le token en localStorage pour que api.ts envoie un
+      // Authorization: Bearer cohérent (même mécanisme que le SSO apprenant).
+      if (data.token) {
+        try { window.localStorage.setItem('token', data.token); } catch {}
       }
 
       // Redirection selon le role
