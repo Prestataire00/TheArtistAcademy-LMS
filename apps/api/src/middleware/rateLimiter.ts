@@ -22,3 +22,13 @@ export const progressRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Limite les tests d'envoi email manuels par admin (cle = userId si auth, sinon IP)
+export const testEmailRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Trop d\'envois de test, attendez 1 minute.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.user?.userId || req.ip,
+});

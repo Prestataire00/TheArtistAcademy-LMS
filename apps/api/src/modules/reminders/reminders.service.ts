@@ -511,6 +511,47 @@ export async function sendReminderFor(
   }
 }
 
+// ─── Test d'envoi manuel (admin) : email libre + template au choix ───────────
+
+export type TestEmailTemplate = 'relance_inactivite' | 'test_simple';
+
+export async function sendTestEmailTo(
+  to: string,
+  template: TestEmailTemplate,
+): Promise<{ messageId: string | null }> {
+  if (template === 'test_simple') {
+    const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+    const html = `<!DOCTYPE html>
+<html lang="fr"><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #111827;">
+  <h2 style="color: ${BRAND_COLOR};">Hello world from TAA LMS</h2>
+  <p>Email de test envoye le ${now} (Europe/Paris).</p>
+  <p style="font-size: 12px; color: #9ca3af;">The Artist Academy — test technique de la chaine Resend.</p>
+</body></html>`;
+    const messageId = await sendHtmlEmail({
+      to: { email: to },
+      subject: 'Test TAA LMS',
+      html,
+    });
+    return { messageId };
+  }
+
+  // template === 'relance_inactivite' → meme template que le cron, donnees fake
+  const tpl = await getTemplateByName(DEFAULT_TEMPLATE_NAME);
+  const { subject, html } = renderTemplate(tpl, {
+    prenom: 'Test',
+    nom: 'User',
+    formation: 'Formation de test',
+    modules_en_retard: ['Module 1 : Introduction', 'Module 2 : Notions avancees'],
+    lien_formation: `${env.WEB_URL}/formations/test`,
+  });
+  const messageId = await sendHtmlEmail({
+    to: { email: to },
+    subject,
+    html,
+  });
+  return { messageId };
+}
+
 // ─── Job : exécute les règles actives (filtrées par hour ou toutes) ──────────
 
 interface RunDetail {

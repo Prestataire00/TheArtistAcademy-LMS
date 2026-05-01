@@ -13,16 +13,17 @@ interface SendHtmlEmailParams {
 /**
  * Envoi d'un email HTML direct via Resend.
  * Throw en cas d'erreur : l'appelant gère le fallback / logging.
+ * Retourne l'id Resend du message envoyé (null si RESEND_API_KEY absente).
  */
-export async function sendHtmlEmail(params: SendHtmlEmailParams): Promise<void> {
+export async function sendHtmlEmail(params: SendHtmlEmailParams): Promise<string | null> {
   if (!env.RESEND_API_KEY) {
     logger.warn('RESEND_API_KEY not set — HTML email skipped', { to: params.to.email, subject: params.subject });
-    return;
+    return null;
   }
 
   const from = `${env.EMAIL_FROM_NAME} <${env.EMAIL_FROM_ADDRESS}>`;
 
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from,
     to: [params.to.email],
     subject: params.subject,
@@ -32,10 +33,13 @@ export async function sendHtmlEmail(params: SendHtmlEmailParams): Promise<void> 
   if (error) {
     // On lève avec message explicite pour que l'appelant puisse logger / stocker l'erreur
     const message = (error as any)?.message ?? JSON.stringify(error);
-    throw new Error(message);
+    const wrapped = new Error(message);
+    (wrapped as any).details = error;
+    throw wrapped;
   }
 
-  logger.debug('HTML email sent', { to: params.to.email, subject: params.subject });
+  logger.debug('HTML email sent', { to: params.to.email, subject: params.subject, id: data?.id });
+  return data?.id ?? null;
 }
 
 // ─── Password reset email ────────────────────────────────────────────────────

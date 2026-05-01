@@ -29,7 +29,7 @@ const ReactQuill = dynamic(
   },
 );
 
-type Tab = 'rules' | 'templates' | 'logs';
+type Tab = 'rules' | 'templates' | 'logs' | 'test';
 
 interface Rule {
   id: string;
@@ -94,11 +94,13 @@ export default function AdminRelancesPage() {
         <TabButton active={tab === 'rules'} onClick={() => setTab('rules')}>Regles</TabButton>
         <TabButton active={tab === 'templates'} onClick={() => setTab('templates')}>Templates</TabButton>
         <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>Journal</TabButton>
+        <TabButton active={tab === 'test'} onClick={() => setTab('test')}>Tester l'envoi</TabButton>
       </div>
 
       {tab === 'rules' && <RulesTab />}
       {tab === 'templates' && <TemplatesTab />}
       {tab === 'logs' && <LogsTab />}
+      {tab === 'test' && <TestEmailTab />}
     </div>
   );
 }
@@ -981,6 +983,109 @@ function LogsTab() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Onglet 4 : Test d'envoi manuel ───────────────────────────────────────────
+
+type TestTemplate = 'relance_inactivite' | 'test_simple';
+
+type TestState =
+  | { status: 'idle' }
+  | { status: 'sending' }
+  | { status: 'success'; to: string; messageId: string | null }
+  | { status: 'error'; message: string };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function TestEmailTab() {
+  const [to, setTo] = useState('');
+  const [template, setTemplate] = useState<TestTemplate>('test_simple');
+  const [state, setState] = useState<TestState>({ status: 'idle' });
+
+  const emailValid = EMAIL_RE.test(to.trim());
+  const sending = state.status === 'sending';
+
+  async function send() {
+    if (!emailValid || sending) return;
+    setState({ status: 'sending' });
+    try {
+      const res = await api.post<{ success: boolean; messageId: string | null; to: string }>(
+        '/admin/relances/test-email',
+        { to: to.trim(), template },
+      );
+      setState({ status: 'success', to: res.to, messageId: res.messageId });
+    } catch (e: any) {
+      setState({ status: 'error', message: e?.message || 'Erreur inconnue' });
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-xl">
+      <h2 className="text-base font-semibold text-gray-900 mb-1">Tester l'envoi</h2>
+      <p className="text-xs text-gray-500 mb-5">
+        Envoie un email reel via Resend. Utile pour verifier la configuration en preprod sans declencher le cron.
+      </p>
+
+      <div className="space-y-4">
+        <label className="block">
+          <span className="text-xs text-gray-500 block mb-1">Destinataire</span>
+          <input
+            type="email"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            placeholder="exemple@domaine.com"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+            disabled={sending}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-xs text-gray-500 block mb-1">Template</span>
+          <select
+            value={template}
+            onChange={(e) => setTemplate(e.target.value as TestTemplate)}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white"
+            disabled={sending}
+          >
+            <option value="relance_inactivite">Relance d'inactivite</option>
+            <option value="test_simple">Email simple de test</option>
+          </select>
+        </label>
+
+        <button
+          onClick={send}
+          disabled={!emailValid || sending}
+          className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+        >
+          {sending ? 'Envoi en cours...' : 'Envoyer le test'}
+        </button>
+
+        {state.status === 'sending' && (
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            Envoi en cours...
+          </div>
+        )}
+
+        {state.status === 'success' && (
+          <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
+            <p className="font-medium">Email envoye a {state.to}</p>
+            {state.messageId ? (
+              <p className="text-xs text-green-600 mt-1 font-mono break-all">ID Resend : {state.messageId}</p>
+            ) : (
+              <p className="text-xs text-green-600 mt-1">Aucun id retourne (RESEND_API_KEY non configuree ?)</p>
+            )}
+          </div>
+        )}
+
+        {state.status === 'error' && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="font-medium">Erreur : {state.message}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

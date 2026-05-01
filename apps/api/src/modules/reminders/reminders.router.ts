@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
+import { testEmailRateLimiter } from '../../middleware/rateLimiter';
 import { asyncHandler, BadRequestError } from '../../shared/errors';
 import { logEvent } from '../../shared/eventLog.service';
 import * as service from './reminders.service';
@@ -30,6 +31,52 @@ remindersRouter.post('/run-now', asyncHandler(async (req: Request, res: Response
   });
   res.json({ data: { sent: result.sent, failed: result.failed, skipped: result.skipped, processed: result.processed, details: result.details } });
 }));
+
+// POST /api/v1/admin/relances/test-email — envoi manuel a une adresse libre
+const testEmailSchema = z.object({
+  to: z.string().email('Adresse email invalide'),
+  template: z.enum(['relance_inactivite', 'test_simple']),
+});
+
+remindersRouter.post(
+  '/test-email',
+  testEmailRateLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = testEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+    const { to, template } = parsed.data;
+
+    try {
+      const { messageId } = await service.sendTestEmailTo(to, template);
+      await logEvent({
+        category: 'admin',
+        action: 'email_test',
+        userId: req.user!.userId,
+        payload: { to, template, result: 'success', messageId },
+        ipAddress: req.ip,
+      });
+      res.json({ success: true, messageId, to });
+    } catch (err: any) {
+      const message = err?.message || 'Echec de l\'envoi';
+      await logEvent({
+        category: 'admin',
+        action: 'email_test',
+        userId: req.user!.userId,
+        payload: { to, template, result: 'error', error: message },
+        ipAddress: req.ip,
+      });
+      res.status(502).json({
+        error: {
+          code: 'EMAIL_SEND_FAILED',
+          message,
+          details: err?.details ?? undefined,
+        },
+      });
+    }
+  }),
+);
 
 // GET /api/v1/admin/relances/test/:enrollmentId
 remindersRouter.get('/test/:enrollmentId', asyncHandler(async (req: Request, res: Response) => {
