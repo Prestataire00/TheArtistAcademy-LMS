@@ -989,8 +989,6 @@ function LogsTab() {
 
 // ─── Onglet 4 : Test d'envoi manuel ───────────────────────────────────────────
 
-type TestTemplate = 'relance_inactivite' | 'test_simple';
-
 type TestState =
   | { status: 'idle' }
   | { status: 'sending' }
@@ -998,11 +996,26 @@ type TestState =
   | { status: 'error'; message: string };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SIMPLE_VALUE = 'simple';
 
 function TestEmailTab() {
   const [to, setTo] = useState('');
-  const [template, setTemplate] = useState<TestTemplate>('test_simple');
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [selected, setSelected] = useState<string>(SIMPLE_VALUE);
+  const [force, setForce] = useState(false);
   const [state, setState] = useState<TestState>({ status: 'idle' });
+
+  useEffect(() => {
+    setTemplatesLoading(true);
+    api.get<{ data: Template[] }>('/admin/relances/templates')
+      .then(({ data }) => {
+        const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
+        setTemplates(sorted);
+      })
+      .catch(() => setTemplates([]))
+      .finally(() => setTemplatesLoading(false));
+  }, []);
 
   const emailValid = EMAIL_RE.test(to.trim());
   const sending = state.status === 'sending';
@@ -1010,10 +1023,21 @@ function TestEmailTab() {
   async function send() {
     if (!emailValid || sending) return;
     setState({ status: 'sending' });
+
+    let body: Record<string, unknown>;
+    if (selected === SIMPLE_VALUE) {
+      body = { to: to.trim(), templateType: 'simple', force };
+    } else if (selected.startsWith('db:')) {
+      body = { to: to.trim(), templateType: 'db', templateId: selected.slice(3), force };
+    } else {
+      setState({ status: 'error', message: 'Selection de template invalide.' });
+      return;
+    }
+
     try {
       const res = await api.post<{ success: boolean; messageId: string | null; to: string }>(
         '/admin/relances/test-email',
-        { to: to.trim(), template },
+        body,
       );
       setState({ status: 'success', to: res.to, messageId: res.messageId });
     } catch (e: any) {
@@ -1044,14 +1068,28 @@ function TestEmailTab() {
         <label className="block">
           <span className="text-xs text-gray-500 block mb-1">Template</span>
           <select
-            value={template}
-            onChange={(e) => setTemplate(e.target.value as TestTemplate)}
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white"
-            disabled={sending}
+            disabled={sending || templatesLoading}
           >
-            <option value="relance_inactivite">Relance d'inactivite</option>
-            <option value="test_simple">Email simple de test</option>
+            <option value={SIMPLE_VALUE}>Email simple de test</option>
+            {templates.map((t) => (
+              <option key={t.id} value={`db:${t.id}`}>{t.name} (v{t.version})</option>
+            ))}
           </select>
+          {templatesLoading && <p className="text-[11px] text-gray-400 mt-1">Chargement des templates...</p>}
+        </label>
+
+        <label className="flex items-start gap-2 text-xs text-gray-700">
+          <input
+            type="checkbox"
+            checked={force}
+            onChange={(e) => setForce(e.target.checked)}
+            disabled={sending}
+            className="mt-0.5"
+          />
+          <span>Forcer l'envoi (TLD inhabituel, ex: .photography, .tech)</span>
         </label>
 
         <button

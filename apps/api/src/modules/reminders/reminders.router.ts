@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
 import { testEmailRateLimiter } from '../../middleware/rateLimiter';
-import { asyncHandler, BadRequestError } from '../../shared/errors';
+import { asyncHandler, BadRequestError, NotFoundError } from '../../shared/errors';
 import { logEvent } from '../../shared/eventLog.service';
+import { checkEmailTld } from '../../shared/email.service';
 import * as service from './reminders.service';
 
 export const remindersRouter = Router();
@@ -33,10 +34,17 @@ remindersRouter.post('/run-now', asyncHandler(async (req: Request, res: Response
 }));
 
 // POST /api/v1/admin/relances/test-email — envoi manuel a une adresse libre
-const testEmailSchema = z.object({
-  to: z.string().email('Adresse email invalide'),
-  template: z.enum(['relance_inactivite', 'test_simple']),
-});
+const testEmailSchema = z
+  .object({
+    to: z.string().email('Adresse email invalide'),
+    templateType: z.enum(['simple', 'db']),
+    templateId: z.string().uuid().optional(),
+    force: z.boolean().optional(),
+  })
+  .refine((d) => d.templateType !== 'db' || !!d.templateId, {
+    message: 'templateId requis quand templateType=db',
+    path: ['templateId'],
+  });
 
 remindersRouter.post(
   '/test-email',
@@ -46,28 +54,64 @@ remindersRouter.post(
     if (!parsed.success) {
       throw new BadRequestError(parsed.error.issues.map((i) => i.message).join('; '));
     }
-    const { to, template } = parsed.data;
+    const { to, templateType, templateId, force } = parsed.data;
+
+    // Validation TLD : evite les fautes de frappe qui bouncent immediatement.
+    // L'admin peut contourner avec force=true pour les TLD inhabituels legitimes.
+    if (!force) {
+      const tldCheck = checkEmailTld(to);
+      if (!tldCheck.ok) {
+        await logEvent({
+          category: 'admin',
+          action: 'email_test',
+          userId: req.user!.userId,
+          payload: { to, templateType, templateId, result: 'rejected', reason: 'invalid_tld', tld: tldCheck.tld },
+          ipAddress: req.ip,
+        });
+        return res.status(422).json({
+          error: {
+            code: 'INVALID_TLD',
+            message: `Le domaine de destination semble invalide (TLD non reconnu : .${tldCheck.tld ?? '?'}). Si tu es sur que c'est valide, coche "Forcer l'envoi" pour contourner cette validation.`,
+          },
+        });
+      }
+    }
+
+    const options: service.TestEmailOptions =
+      templateType === 'simple' ? { type: 'simple' } : { type: 'db', templateId: templateId! };
 
     try {
-      const { messageId } = await service.sendTestEmailTo(to, template);
+      const { messageId } = await service.sendTestEmailTo(to, options);
       await logEvent({
         category: 'admin',
         action: 'email_test',
         userId: req.user!.userId,
-        payload: { to, template, result: 'success', messageId },
+        payload: { to, templateType, templateId, force: !!force, result: 'success', messageId },
         ipAddress: req.ip,
       });
-      res.json({ success: true, messageId, to });
+      return res.json({ success: true, messageId, to });
     } catch (err: any) {
+      if (err instanceof NotFoundError) {
+        await logEvent({
+          category: 'admin',
+          action: 'email_test',
+          userId: req.user!.userId,
+          payload: { to, templateType, templateId, result: 'error', error: 'template_not_found' },
+          ipAddress: req.ip,
+        });
+        return res.status(404).json({
+          error: { code: 'TEMPLATE_NOT_FOUND', message: 'Template introuvable.' },
+        });
+      }
       const message = err?.message || 'Echec de l\'envoi';
       await logEvent({
         category: 'admin',
         action: 'email_test',
         userId: req.user!.userId,
-        payload: { to, template, result: 'error', error: message },
+        payload: { to, templateType, templateId, force: !!force, result: 'error', error: message },
         ipAddress: req.ip,
       });
-      res.status(502).json({
+      return res.status(502).json({
         error: {
           code: 'EMAIL_SEND_FAILED',
           message,

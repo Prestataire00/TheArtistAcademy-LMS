@@ -513,13 +513,15 @@ export async function sendReminderFor(
 
 // ─── Test d'envoi manuel (admin) : email libre + template au choix ───────────
 
-export type TestEmailTemplate = 'relance_inactivite' | 'test_simple';
+export type TestEmailOptions =
+  | { type: 'simple' }
+  | { type: 'db'; templateId: string };
 
 export async function sendTestEmailTo(
   to: string,
-  template: TestEmailTemplate,
+  options: TestEmailOptions,
 ): Promise<{ messageId: string | null }> {
-  if (template === 'test_simple') {
+  if (options.type === 'simple') {
     const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
     const html = `<!DOCTYPE html>
 <html lang="fr"><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; color: #111827;">
@@ -535,8 +537,10 @@ export async function sendTestEmailTo(
     return { messageId };
   }
 
-  // template === 'relance_inactivite' → meme template que le cron, donnees fake
-  const tpl = await getTemplateByName(DEFAULT_TEMPLATE_NAME);
+  // type === 'db' : on prend n'importe quel template par id, donnees fake
+  const tpl = await prisma.reminderTemplate.findUnique({ where: { id: options.templateId } });
+  if (!tpl) throw new NotFoundError('Template');
+
   const { subject, html } = renderTemplate(tpl, {
     prenom: 'Test',
     nom: 'User',
@@ -544,10 +548,17 @@ export async function sendTestEmailTo(
     modules_en_retard: ['Module 1 : Introduction', 'Module 2 : Notions avancees'],
     lien_formation: `${env.WEB_URL}/formations/test`,
   });
+  // Variables non-standard eventuellement utilisees par des templates custom
+  const extraReplacements: Record<string, string> = {
+    '{{apprenant_email}}': to,
+  };
+  const apply = (s: string) =>
+    Object.entries(extraReplacements).reduce((out, [k, v]) => out.replaceAll(k, v), s);
+
   const messageId = await sendHtmlEmail({
     to: { email: to },
-    subject,
-    html,
+    subject: apply(subject),
+    html: apply(html),
   });
   return { messageId };
 }
