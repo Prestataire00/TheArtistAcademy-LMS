@@ -56,6 +56,12 @@ remindersRouter.post(
     }
     const { to, templateType, templateId, force } = parsed.data;
 
+    // Identifiant d'entite pour EventLog : "simple_test" pour le hardcode,
+    // sinon l'UUID du ReminderTemplate cible. Permet de requeter par template :
+    //   SELECT * FROM event_logs WHERE action='email_test' AND entity_id='<uuid>';
+    const entityType = 'EmailTemplate';
+    const entityId = templateType === 'simple' ? 'simple_test' : templateId!;
+
     // Validation TLD : evite les fautes de frappe qui bouncent immediatement.
     // L'admin peut contourner avec force=true pour les TLD inhabituels legitimes.
     if (!force) {
@@ -65,6 +71,8 @@ remindersRouter.post(
           category: 'admin',
           action: 'email_test',
           userId: req.user!.userId,
+          entityType,
+          entityId,
           payload: { to, templateType, templateId, result: 'rejected', reason: 'invalid_tld', tld: tldCheck.tld },
           ipAddress: req.ip,
         });
@@ -86,6 +94,8 @@ remindersRouter.post(
         category: 'admin',
         action: 'email_test',
         userId: req.user!.userId,
+        entityType,
+        entityId,
         payload: { to, templateType, templateId, force: !!force, result: 'success', messageId },
         ipAddress: req.ip,
       });
@@ -96,6 +106,8 @@ remindersRouter.post(
           category: 'admin',
           action: 'email_test',
           userId: req.user!.userId,
+          entityType,
+          entityId,
           payload: { to, templateType, templateId, result: 'error', error: 'template_not_found' },
           ipAddress: req.ip,
         });
@@ -108,6 +120,8 @@ remindersRouter.post(
         category: 'admin',
         action: 'email_test',
         userId: req.user!.userId,
+        entityType,
+        entityId,
         payload: { to, templateType, templateId, force: !!force, result: 'error', error: message },
         ipAddress: req.ip,
       });
