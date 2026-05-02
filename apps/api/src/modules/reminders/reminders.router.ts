@@ -38,7 +38,7 @@ const testEmailSchema = z
   .object({
     to: z.string().email('Adresse email invalide'),
     templateType: z.enum(['simple', 'db']),
-    templateId: z.string().uuid().optional(),
+    templateId: z.string().cuid().optional(),
     force: z.boolean().optional(),
   })
   .refine((d) => d.templateType !== 'db' || !!d.templateId, {
