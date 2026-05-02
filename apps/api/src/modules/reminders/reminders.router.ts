@@ -5,7 +5,6 @@ import { requireRole } from '../../middleware/requireRole';
 import { testEmailRateLimiter } from '../../middleware/rateLimiter';
 import { asyncHandler, BadRequestError, NotFoundError } from '../../shared/errors';
 import { logEvent } from '../../shared/eventLog.service';
-import { checkEmailTld } from '../../shared/email.service';
 import * as service from './reminders.service';
 
 export const remindersRouter = Router();
@@ -39,7 +38,6 @@ const testEmailSchema = z
     to: z.string().email('Adresse email invalide'),
     templateType: z.enum(['simple', 'db']),
     templateId: z.string().cuid().optional(),
-    force: z.boolean().optional(),
   })
   .refine((d) => d.templateType !== 'db' || !!d.templateId, {
     message: 'templateId requis quand templateType=db',
@@ -54,36 +52,13 @@ remindersRouter.post(
     if (!parsed.success) {
       throw new BadRequestError(parsed.error.issues.map((i) => i.message).join('; '));
     }
-    const { to, templateType, templateId, force } = parsed.data;
+    const { to, templateType, templateId } = parsed.data;
 
     // Identifiant d'entite pour EventLog : "simple_test" pour le hardcode,
     // sinon l'UUID du ReminderTemplate cible. Permet de requeter par template :
     //   SELECT * FROM event_logs WHERE action='email_test' AND entity_id='<uuid>';
     const entityType = 'EmailTemplate';
     const entityId = templateType === 'simple' ? 'simple_test' : templateId!;
-
-    // Validation TLD : evite les fautes de frappe qui bouncent immediatement.
-    // L'admin peut contourner avec force=true pour les TLD inhabituels legitimes.
-    if (!force) {
-      const tldCheck = checkEmailTld(to);
-      if (!tldCheck.ok) {
-        await logEvent({
-          category: 'admin',
-          action: 'email_test',
-          userId: req.user!.userId,
-          entityType,
-          entityId,
-          payload: { to, templateType, templateId, result: 'rejected', reason: 'invalid_tld', tld: tldCheck.tld },
-          ipAddress: req.ip,
-        });
-        return res.status(422).json({
-          error: {
-            code: 'INVALID_TLD',
-            message: `Le domaine de destination semble invalide (TLD non reconnu : .${tldCheck.tld ?? '?'}). Si tu es sur que c'est valide, coche "Forcer l'envoi" pour contourner cette validation.`,
-          },
-        });
-      }
-    }
 
     const options: service.TestEmailOptions =
       templateType === 'simple' ? { type: 'simple' } : { type: 'db', templateId: templateId! };
@@ -96,7 +71,7 @@ remindersRouter.post(
         userId: req.user!.userId,
         entityType,
         entityId,
-        payload: { to, templateType, templateId, force: !!force, result: 'success', messageId },
+        payload: { to, templateType, templateId, result: 'success', messageId },
         ipAddress: req.ip,
       });
       return res.json({ success: true, messageId, to });
@@ -122,7 +97,7 @@ remindersRouter.post(
         userId: req.user!.userId,
         entityType,
         entityId,
-        payload: { to, templateType, templateId, force: !!force, result: 'error', error: message },
+        payload: { to, templateType, templateId, result: 'error', error: message },
         ipAddress: req.ip,
       });
       return res.status(502).json({

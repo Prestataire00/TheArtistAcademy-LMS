@@ -42,47 +42,6 @@ export async function sendHtmlEmail(params: SendHtmlEmailParams): Promise<string
   return data?.id ?? null;
 }
 
-// ─── Validation TLD du destinataire ──────────────────────────────────────────
-
-// Liste des TLD courants. Si un email a un TLD hors liste, on demande
-// confirmation explicite (force=true) pour eviter d'envoyer vers des fautes
-// de frappe ("@gmail.con", "@yahoo.fr.zzzzz") qui bouncent immediatement.
-// Source : usage reel + ccTLD ISO 3166 frequents + nouveaux gTLD courants.
-const KNOWN_TLDS = new Set([
-  // gTLD historiques
-  'com', 'net', 'org', 'edu', 'gov', 'mil', 'int', 'info', 'biz', 'name', 'pro',
-  // gTLD modernes courants
-  'io', 'co', 'app', 'dev', 'tech', 'cloud', 'agency', 'studio', 'design', 'art',
-  'shop', 'store', 'site', 'online', 'xyz', 'me', 'tv', 'fm', 'ai', 'eu',
-  'photography', 'media', 'group', 'world', 'today', 'news', 'blog', 'email',
-  'academy', 'school', 'training', 'education', 'consulting', 'solutions',
-  'health', 'paris', 'london', 'nyc', 'global', 'inc', 'llc', 'ltd', 'gmbh',
-  // ccTLD courants (Europe + Amerique + Asie + Oceanie principaux)
-  'fr', 'uk', 'us', 'ca', 'de', 'es', 'it', 'nl', 'be', 'ch', 'pt', 'pl',
-  'se', 'no', 'dk', 'fi', 'ie', 'at', 'lu', 'gr', 'cz', 'sk', 'hu', 'ro',
-  'bg', 'hr', 'si', 'lt', 'lv', 'ee', 'is', 'mt', 'cy', 'mc', 'li',
-  'ru', 'ua', 'by', 'tr', 'il', 'sa', 'ae', 'qa', 'kw', 'eg', 'ma', 'tn', 'dz',
-  'jp', 'cn', 'hk', 'tw', 'kr', 'sg', 'my', 'th', 'vn', 'id', 'ph', 'in', 'pk',
-  'au', 'nz',
-  'br', 'mx', 'ar', 'cl', 'co', 'pe', 've', 'uy',
-  'za', 'ng', 'ke',
-]);
-
-export interface TldCheckResult {
-  ok: boolean;
-  tld?: string;
-}
-
-export function checkEmailTld(email: string): TldCheckResult {
-  const at = email.lastIndexOf('@');
-  if (at < 0) return { ok: false };
-  const domain = email.slice(at + 1).toLowerCase();
-  const dot = domain.lastIndexOf('.');
-  if (dot < 0) return { ok: false };
-  const tld = domain.slice(dot + 1);
-  return { ok: KNOWN_TLDS.has(tld), tld };
-}
-
 // ─── Password reset email ────────────────────────────────────────────────────
 
 interface PasswordResetEmailParams {

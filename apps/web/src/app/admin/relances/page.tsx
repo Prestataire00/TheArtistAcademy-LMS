@@ -1003,7 +1003,6 @@ function TestEmailTab() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [selected, setSelected] = useState<string>(SIMPLE_VALUE);
-  const [force, setForce] = useState(false);
   const [state, setState] = useState<TestState>({ status: 'idle' });
 
   useEffect(() => {
@@ -1026,9 +1025,9 @@ function TestEmailTab() {
 
     let body: Record<string, unknown>;
     if (selected === SIMPLE_VALUE) {
-      body = { to: to.trim(), templateType: 'simple', force };
+      body = { to: to.trim(), templateType: 'simple' };
     } else if (selected.startsWith('db:')) {
-      body = { to: to.trim(), templateType: 'db', templateId: selected.slice(3), force };
+      body = { to: to.trim(), templateType: 'db', templateId: selected.slice(3) };
     } else {
       setState({ status: 'error', message: 'Selection de template invalide.' });
       return;
@@ -1079,17 +1078,6 @@ function TestEmailTab() {
             ))}
           </select>
           {templatesLoading && <p className="text-[11px] text-gray-400 mt-1">Chargement des templates...</p>}
-        </label>
-
-        <label className="flex items-start gap-2 text-xs text-gray-700">
-          <input
-            type="checkbox"
-            checked={force}
-            onChange={(e) => setForce(e.target.checked)}
-            disabled={sending}
-            className="mt-0.5"
-          />
-          <span>Forcer l'envoi (TLD inhabituel, ex: .photography, .tech)</span>
         </label>
 
         <button
