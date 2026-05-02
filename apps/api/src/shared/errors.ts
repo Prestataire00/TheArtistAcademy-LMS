@@ -42,6 +42,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class UALockedError extends AppError {
+  constructor() {
+    super(403, "Cette unité d'apprentissage n'est pas encore accessible", 'UA_LOCKED');
+  }
+}
+
 /**
  * Wraps an async Express handler so thrown errors reach the error middleware.
  */

@@ -2,6 +2,7 @@ import { prisma } from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
 import { CompletionStatus } from '@prisma/client';
 import { logger } from '../../shared/logger';
+import { computePathwayLocks } from '../../shared/pathway';
 
 /**
  * Retourne les données complètes de la formation pour un apprenant :
@@ -87,6 +88,19 @@ export async function getPlayerFormation(userId: string, formationId: string) {
   ]);
 
   const uaProgressMap = new Map(uaProgresses.map((p) => [p.uaId, p]));
+  const uaStatusMap = new Map<string, CompletionStatus>(
+    uaProgresses.map((p) => [p.uaId, p.status]),
+  );
+
+  const { moduleLocks, uaLocks } = computePathwayLocks(
+    formation.pathwayMode,
+    formation.modules.map((m) => ({
+      id: m.id,
+      position: m.position,
+      uas: m.uas.map((u) => ({ id: u.id, position: u.position })),
+    })),
+    uaStatusMap,
+  );
 
   // Construire les modules avec progression
   let totalUAs = 0;
@@ -94,7 +108,7 @@ export async function getPlayerFormation(userId: string, formationId: string) {
   let totalTimeSpent = 0;
   let firstIncompleteUaId: string | null = null;
 
-  const modules = formation.modules.map((mod, modIndex) => {
+  const modules = formation.modules.map((mod) => {
     let moduleCompleted = 0;
     let moduleTotal = 0;
 
@@ -109,7 +123,9 @@ export async function getPlayerFormation(userId: string, formationId: string) {
         completedUAs++;
       }
 
-      if (!firstIncompleteUaId && status !== 'completed') {
+      const uaLocked = uaLocks.get(ua.id) ?? false;
+      // Continuer = première UA non terminée ET non verrouillée
+      if (!firstIncompleteUaId && status !== 'completed' && !uaLocked) {
         firstIncompleteUaId = ua.id;
       }
 
@@ -123,6 +139,7 @@ export async function getPlayerFormation(userId: string, formationId: string) {
         type: ua.type,
         position: ua.position,
         status,
+        isLocked: uaLocked,
       };
     });
 
@@ -132,18 +149,6 @@ export async function getPlayerFormation(userId: string, formationId: string) {
       moduleCompleted >= moduleTotal ? 'completed' :
       'in_progress';
 
-    // Mode linéaire : verrouiller si le module précédent n'est pas terminé
-    let isLocked = false;
-    if (formation.pathwayMode === 'linear' && modIndex > 0) {
-      const prevModule = formation.modules[modIndex - 1];
-      const prevUAs = prevModule.uas;
-      const prevAllCompleted = prevUAs.every((ua) => {
-        const p = uaProgressMap.get(ua.id);
-        return p?.status === 'completed';
-      });
-      isLocked = !prevAllCompleted;
-    }
-
     return {
       id: mod.id,
       title: mod.title,
@@ -151,7 +156,7 @@ export async function getPlayerFormation(userId: string, formationId: string) {
       position: mod.position,
       status: moduleStatus,
       progressPercent: moduleProgressPercent,
-      isLocked,
+      isLocked: moduleLocks.get(mod.id) ?? false,
       uas,
     };
   });
