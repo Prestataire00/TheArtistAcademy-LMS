@@ -107,6 +107,10 @@ model User {
   createdAt      DateTime  @default(now()) @map("created_at")
   lastSeenAt     DateTime? @map("last_seen_at")
 
+  // Champs Extranet Dendreo (récupérés via API standard sur enrolment.created)
+  extranetAutologinUrl  String?   @map("extranet_autologin_url")
+  extranetCode          String?   @map("extranet_code")
+
   enrollments         Enrollment[]
   eventLogs            EventLog[]
   reminderLogs         ReminderLog[]

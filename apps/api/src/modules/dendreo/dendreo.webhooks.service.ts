@@ -4,6 +4,7 @@ import { logEvent } from '../../shared/eventLog.service';
 import { BadRequestError, NotFoundError } from '../../shared/errors';
 import { logger } from '../../shared/logger';
 import { sendProgressionToDendreo } from './dendreo.progression.service';
+import { fetchDendreoParticipant } from './dendreo.api.client';
 
 // ─── Users webhook ───────────────────────────────────────────────────────────
 
@@ -282,6 +283,16 @@ export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
     payload: { dendreoEnrolmentId, trainingId: data.training_id },
   });
 
+  // Pull Extranet info (autologin URL) — fire-and-forget, ne bloque pas le webhook.
+  // Conditions : enrolment.created + user a un externalId + URL pas encore stockée.
+  if (
+    event === 'enrolment.created' &&
+    user.externalId &&
+    !user.extranetAutologinUrl
+  ) {
+    void pullExtranetInfo(user.id, user.externalId);
+  }
+
   // Spec : si l'enrolment existait déjà sur enrolment.created -> renvoyer la progression
   if (event === 'enrolment.created' && alreadyExisted) {
     sendProgressionToDendreo(enrollment.id).catch(() => {});
@@ -319,4 +330,40 @@ async function handleEnrolmentDeleted(dendreoEnrolmentId: string) {
   logger.info('Dendreo webhook: enrolment deleted (closed)', { enrollmentId: enrollment.id });
 
   return { enrolment_id: enrollment.id };
+}
+
+async function pullExtranetInfo(userId: string, externalId: string): Promise<void> {
+  try {
+    const participant = await fetchDendreoParticipant(externalId);
+    if (!participant) return;
+
+    const updates: { extranetAutologinUrl?: string; extranetCode?: string } = {};
+    if (participant.extranet_autologin_url) {
+      updates.extranetAutologinUrl = participant.extranet_autologin_url;
+    }
+    if (participant.extranet_code) {
+      updates.extranetCode = participant.extranet_code;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      logger.warn('Dendreo API: extranet_autologin_url absent dans la réponse', {
+        userId,
+        externalId,
+      });
+      return;
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: updates,
+    });
+
+    logger.info('Dendreo: extranet info stocké', { userId });
+  } catch (err) {
+    logger.error('Dendreo: échec pull extranet info', {
+      userId,
+      externalId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }

@@ -41,7 +41,12 @@ const envSchema = z.object({
   // Webhooks Dendreo
   DENDREO_WEBHOOK_SECRET: z.string().default(''),
   DENDREO_API_KEY: z.string().default(''),
+  DENDREO_REST_API_KEY: z.string().default(''),
   DENDREO_TENANT_ID: z.string().default(''),
+
+  // API standard Dendreo (pour pull extranet_autologin_url)
+  DENDREO_API_BASE_URL: z.string().default(''),
+  DENDREO_API_TIMEOUT_MS: z.coerce.number().default(10000),
 });
 
 const parsed = envSchema.safeParse(process.env);

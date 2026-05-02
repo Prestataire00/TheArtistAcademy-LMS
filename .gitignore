@@ -43,3 +43,6 @@ tmp/
 
 # Coverage
 coverage/
+
+# Claude Code internal files
+.claude/
