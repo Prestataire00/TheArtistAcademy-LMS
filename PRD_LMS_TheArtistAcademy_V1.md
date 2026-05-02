@@ -5,9 +5,9 @@
 LMS Custom --- Remplacement Dokeos
 
   ---------------------------- ------------------------------------------
-  **Version**                  V1.0
+  **Version**                  V1.1
 
-  **Date**                     Avril 2026
+  **Date**                     Mai 2026
 
   **Statut**                   Draft --- Pour revue
 
@@ -471,6 +471,62 @@ côté apprenant.
 -   Journal admin exportable : règle déclenchante, destinataire,
     date/heure, statut envoyé/échec, template utilisé/version
 
+**7.5.1 Lien d\'accès dans les emails**
+
+Conformément au principe « Dendreo = porte d\'entrée unique apprenant »
+(cf. §4), le lien d\'accès contenu dans les emails de relance pointe
+vers l\'Extranet Participant Dendreo. Le LMS NE génère PAS de token
+d\'accès direct côté LMS pour ces emails.
+
+Le LMS utilise le champ extranet_autologin_url fourni par l\'API Dendreo
+(GET /participants/[id]) pour générer un lien d\'autologin direct vers
+l\'Extranet du participant.
+
+**Architecture :**
+
+-   À la création/mise à jour d\'un compte apprenant (webhooks Dendreo :
+    user.created, enrolment.created), le LMS appelle l\'API Dendreo
+    pour récupérer extranet_autologin_url et le stocke en base sur la
+    fiche apprenant
+
+-   Le service de relance email injecte cette URL dans la variable
+    {{lien_formation}} (ou équivalent) du template au moment du rendu
+
+**Comportement utilisateur :**
+
+-   L\'apprenant clique sur le lien dans l\'email
+
+-   Il est connecté automatiquement à son Extranet Dendreo (autologin)
+
+-   Il accède au LMS via le bouton SSO de Dendreo (déjà fonctionnel)
+
+**Fallback :**
+
+-   Si extranet_autologin_url n\'est pas disponible (ex: erreur API au
+    moment de la création), le LMS utilise l\'URL Extranet standard
+    (`https://extranet.[centre].com`) en fallback
+
+-   L\'apprenant devra saisir ses identifiants Dendreo dans ce cas
+
+**Sécurité :**
+
+-   L\'URL d\'autologin est confidentielle et ne doit pas être partagée
+
+-   Elle est stockée en base sur la fiche apprenant
+
+-   Sa durée de validité est gérée par Dendreo
+
+**Bénéfices :**
+
+-   1 clic pour l\'apprenant (autologin Dendreo)
+
+-   Conforme à la philosophie « Dendreo orchestre l\'accès apprenant »
+
+-   Pas de seconde porte d\'entrée à sécuriser côté LMS
+
+-   Cohérent avec le bouton « Mes formations » qui renvoie déjà vers
+    l\'Extranet Dendreo (cf. §5.1, §4.6)
+
 **8. Logs & Traçabilité**
 
 Tous les événements suivants doivent être journalisés avec horodatage et
@@ -703,6 +759,10 @@ Des tableaux de bord simples sont disponibles pour Admin et Formateur
 -   ✅ Le journal admin affiche bien le statut d\'envoi de chaque
     relance
 
+-   ✅ Le lien contenu dans l\'email pointe vers l\'Extranet Participant
+    Dendreo (extranet_autologin_url) --- aucun token d\'accès direct
+    n\'est généré côté LMS (cf. §7.5.1)
+
 **13. Glossaire**
 
   -----------------------------------------------------------------------
@@ -737,6 +797,29 @@ Des tableaux de bord simples sont disponibles pour Admin et Formateur
 
   Webhook             Mécanisme de notification HTTP du LMS vers Dendreo
                       pour synchroniser la progression
+
+  extranet_autologin_url Champ retourné par l\'API Dendreo (GET
+                      /participants/[id]) contenant un lien d\'autologin
+                      direct vers l\'Extranet Participant Dendreo.
+                      Utilisé par le LMS dans les emails de relance pour
+                      offrir un accès en 1 clic sans seconde porte
+                      d\'entrée
   -----------------------------------------------------------------------
 
-*--- Fin du document PRD LMS --- The Artist Academy V1 ---*
+**14. Changelog**
+
+  -----------------------------------------------------------------------
+  **Version**   **Date**       **Modifications**
+  ------------- -------------- ------------------------------------------
+  V1.0          Avril 2026     Version initiale
+
+  V1.1          Mai 2026       §7.5 : précision sur l\'architecture du
+                               lien dans les emails de relance
+                               (utilisation de extranet_autologin_url
+                               Dendreo, pas de token LMS). Ajout §7.5.1.
+                               Mise à jour §12.5 (critère d\'acceptance).
+                               Ajout entrée glossaire
+                               extranet_autologin_url
+  -----------------------------------------------------------------------
+
+*--- Fin du document PRD LMS --- The Artist Academy V1.1 ---*
