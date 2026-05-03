@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { SlideOver } from '@/components/SlideOver';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/admin/ToastContext';
 import { ResponsiveList } from '@/components/ResponsiveList';
+import { SearchInput } from '@/components/SearchInput';
+import { SortableHeader } from '@/components/SortableHeader';
+import { FilterPanel } from '@/components/FilterPanel';
+import { Pagination } from '@/components/Pagination';
+import { matchesSearch } from '@/lib/search';
+import { useTableState, sortItems, type FilterDef } from '@/lib/useTableState';
 
 interface Formation {
   id: string;
@@ -17,8 +23,21 @@ interface Formation {
   trainerId: string | null;
   trainerName: string | null;
   modulesCount: number;
+  enrollmentsCount: number;
   createdAt: string;
 }
+
+const NO_TRAINER_VALUE = '__none__';
+
+const SORT_ACCESSORS: Record<string, (f: Formation) => unknown> = {
+  title: (f) => f.title,
+  trainerName: (f) => f.trainerName,
+  pathwayMode: (f) => (f.pathwayMode === 'linear' ? 'Linéaire' : 'Libre'),
+  modulesCount: (f) => f.modulesCount,
+  enrollmentsCount: (f) => f.enrollmentsCount,
+  isPublished: (f) => (f.isPublished ? 'Publiée' : 'Brouillon'),
+  createdAt: (f) => new Date(f.createdAt).getTime(),
+};
 
 interface Trainer {
   id: string;
@@ -32,7 +51,111 @@ export default function AdminFormationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<Formation | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { showToast } = useToast();
+
+  // Bornes du slider Modules calculées dynamiquement depuis le dataset.
+  const modulesMaxBound = useMemo(() => {
+    if (formations.length === 0) return 10;
+    return Math.max(1, ...formations.map((f) => f.modulesCount));
+  }, [formations]);
+
+  // Liste des formateurs présents dans les formations + option "Sans formateur".
+  const trainerOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    let hasNone = false;
+    for (const f of formations) {
+      if (f.trainerId && f.trainerName) seen.set(f.trainerId, f.trainerName);
+      else hasNone = true;
+    }
+    const opts = Array.from(seen.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (hasNone) opts.push({ value: NO_TRAINER_VALUE, label: 'Sans formateur' });
+    return opts;
+  }, [formations]);
+
+  const filterDefs = useMemo<FilterDef[]>(() => [
+    {
+      type: 'multi',
+      key: 'pathwayMode',
+      label: 'Mode parcours',
+      options: [
+        { value: 'linear', label: 'Linéaire' },
+        { value: 'free', label: 'Libre' },
+      ],
+    },
+    {
+      type: 'multi',
+      key: 'published',
+      label: 'Statut publication',
+      options: [
+        { value: 'true', label: 'Publiée' },
+        { value: 'false', label: 'Brouillon' },
+      ],
+    },
+    {
+      type: 'multi',
+      key: 'trainers',
+      label: 'Formateur assigné',
+      variant: 'dropdown',
+      placeholder: 'Tous les formateurs',
+      options: trainerOptions,
+    },
+    {
+      type: 'numericRange',
+      key: 'modules',
+      label: 'Nombre de modules',
+      min: 0,
+      max: modulesMaxBound,
+      step: 1,
+    },
+    {
+      type: 'toggle',
+      key: 'hasLearners',
+      label: 'Avec apprenants inscrits',
+      description: 'Uniquement les formations avec au moins 1 inscrit',
+    },
+  ], [trainerOptions, modulesMaxBound]);
+
+  const t = useTableState({
+    filterDefs,
+    defaultSort: { field: 'createdAt', direction: 'desc' },
+    pageSize: 50,
+  });
+
+  const filtered = useMemo(() => {
+    const pathway = (t.filters.pathwayMode as string[]) ?? [];
+    const published = (t.filters.published as string[]) ?? [];
+    const trainers = (t.filters.trainers as string[]) ?? [];
+    const modulesRange = (t.filters.modules as { min?: number; max?: number }) ?? {};
+    const hasLearners = t.filters.hasLearners === true;
+
+    return formations.filter((f) => {
+      if (!matchesSearch(t.search, [f.title, f.description ?? ''])) return false;
+      if (pathway.length > 0 && !pathway.includes(f.pathwayMode)) return false;
+      if (published.length > 0 && !published.includes(String(f.isPublished))) return false;
+      if (trainers.length > 0) {
+        const id = f.trainerId ?? NO_TRAINER_VALUE;
+        if (!trainers.includes(id)) return false;
+      }
+      if (modulesRange.min !== undefined && f.modulesCount < modulesRange.min) return false;
+      if (modulesRange.max !== undefined && f.modulesCount > modulesRange.max) return false;
+      if (hasLearners && f.enrollmentsCount === 0) return false;
+      return true;
+    });
+  }, [formations, t.search, t.filters]);
+
+  const sorted = useMemo(() => sortItems(filtered, t.sort, SORT_ACCESSORS), [filtered, t.sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / t.pageSize));
+  const paginated = useMemo(
+    () => sorted.slice(t.page * t.pageSize, (t.page + 1) * t.pageSize),
+    [sorted, t.page, t.pageSize],
+  );
+  useEffect(() => {
+    if (t.page > 0 && t.page >= totalPages) t.setPage(totalPages - 1);
+  }, [t.page, totalPages, t.setPage]);
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -85,13 +208,62 @@ export default function AdminFormationsPage() {
         />
       )}
 
+      <div className="mb-4 flex items-center gap-3 flex-wrap">
+        <SearchInput
+          value={t.searchInput}
+          onChange={t.setSearchInput}
+          placeholder="Rechercher une formation..."
+        />
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={`inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors ${
+            t.activeFilterCount > 0 || filtersOpen
+              ? 'bg-brand-50 border-brand-300 text-brand-700'
+              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+          }`}
+          aria-expanded={filtersOpen}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18l-7 9v6l-4 2v-8L3 4z" />
+          </svg>
+          Filtres{t.activeFilterCount > 0 ? ` (${t.activeFilterCount})` : ''}
+        </button>
+        <span className="ml-auto text-sm text-gray-500">
+          {sorted.length} / {formations.length} formations
+        </span>
+      </div>
+
+      {filtersOpen && (
+        <div className="mb-4">
+          <FilterPanel
+            open={filtersOpen}
+            filters={filterDefs}
+            values={t.filters}
+            onChange={t.setFilter}
+            onReset={t.resetFilters}
+            activeCount={t.activeFilterCount}
+          />
+        </div>
+      )}
+
       {formations.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <p className="text-gray-400">Aucune formation. Créez-en une pour commencer.</p>
         </div>
+      ) : sorted.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <p className="text-gray-500 mb-3">Aucune formation ne correspond</p>
+          <button
+            onClick={t.resetSearchAndFilters}
+            className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+          >
+            Effacer les filtres
+          </button>
+        </div>
       ) : (
         <ResponsiveList<Formation>
-          items={formations}
+          items={paginated}
           rowKey={(f) => f.id}
           titleKey={(f) => (
             <a href={`/admin/formations/${f.id}`} className="hover:text-brand-700 transition-colors">
@@ -108,7 +280,10 @@ export default function AdminFormationsPage() {
           )}
           columns={[
             {
-              key: 'title', label: 'Formation', mobileHidden: true,
+              key: 'title',
+              mobileLabel: 'Formation',
+              label: <SortableHeader field="title" label="Formation" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              mobileHidden: true,
               render: (f) => (
                 <>
                   <p className="font-medium text-gray-900">{f.title}</p>
@@ -117,11 +292,16 @@ export default function AdminFormationsPage() {
               ),
             },
             {
-              key: 'trainer', label: 'Formateur', mobileHidden: true,
+              key: 'trainer',
+              mobileLabel: 'Formateur',
+              label: <SortableHeader field="trainerName" label="Formateur" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              mobileHidden: true,
               render: (f) => <span className="text-xs text-gray-500">{f.trainerName || <span className="text-gray-300">—</span>}</span>,
             },
             {
-              key: 'mode', label: 'Mode',
+              key: 'mode',
+              mobileLabel: 'Mode',
+              label: <SortableHeader field="pathwayMode" label="Mode" currentSort={t.sort} onSortChange={t.cycleSort} />,
               render: (f) => (
                 <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
                   f.pathwayMode === 'linear' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'
@@ -135,12 +315,35 @@ export default function AdminFormationsPage() {
               render: (f) => <span className="text-gray-700">{f.videoCompletionThreshold}%</span>,
             },
             {
-              key: 'modules', label: 'Modules',
+              key: 'modules',
+              mobileLabel: 'Modules',
+              label: <SortableHeader field="modulesCount" label="Modules" currentSort={t.sort} onSortChange={t.cycleSort} />,
               render: (f) => <span className="text-gray-700">{f.modulesCount}</span>,
             },
             {
-              key: 'published', label: 'Publiée', align: 'center', mobileHidden: true,
+              key: 'enrollments',
+              mobileLabel: 'Inscrits',
+              label: <SortableHeader field="enrollmentsCount" label="Inscrits" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              render: (f) => <span className="text-gray-700">{f.enrollmentsCount ?? 0}</span>,
+            },
+            {
+              key: 'published',
+              mobileLabel: 'Publiée',
+              label: <SortableHeader field="isPublished" label="Publiée" currentSort={t.sort} onSortChange={t.cycleSort} align="center" />,
+              align: 'center',
+              mobileHidden: true,
               render: (f) => <Toggle checked={f.isPublished} onChange={() => handleTogglePublish(f)} />,
+            },
+            {
+              key: 'created',
+              mobileLabel: 'Créée le',
+              label: <SortableHeader field="createdAt" label="Créée le" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              mobileHidden: true,
+              render: (f) => (
+                <span className="text-gray-500 text-xs">
+                  {new Date(f.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </span>
+              ),
             },
             {
               key: 'actions', label: 'Actions', align: 'right', mobileHidden: true,
@@ -167,6 +370,10 @@ export default function AdminFormationsPage() {
             </>
           )}
         />
+      )}
+
+      {sorted.length > t.pageSize && (
+        <Pagination page={t.page} totalPages={totalPages} onPageChange={t.setPage} />
       )}
     </div>
   );

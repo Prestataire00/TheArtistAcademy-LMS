@@ -5,7 +5,12 @@ export async function listFormations() {
   const formations = await prisma.formation.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
-      _count: { select: { modules: true } },
+      _count: {
+        select: {
+          modules: true,
+          enrollments: { where: { status: 'active' } },
+        },
+      },
       trainer: { select: { id: true, fullName: true, email: true } },
     },
   });
@@ -22,6 +27,7 @@ export async function listFormations() {
     createdAt: f.createdAt.toISOString(),
     updatedAt: f.updatedAt.toISOString(),
     modulesCount: f._count.modules,
+    enrollmentsCount: f._count.enrollments,
   }));
 }
 

@@ -5,9 +5,9 @@
 LMS Custom --- Remplacement Dokeos
 
   ---------------------------- ------------------------------------------
-  **Version**                  V1.1
+  **Version**                  V1.2
 
-  **Date**                     Mai 2026
+  **Date**                     2 mai 2026
 
   **Statut**                   Draft --- Pour revue
 
@@ -130,14 +130,15 @@ porte d\'entrée administrative et apprenant.
                       ou plusieurs UA         
 
   UA (Unité           Plus petite unité       1 vidéo OU 1 quiz OU 1
-  d\'Apprentissage)   suivie --- 1 seul       ressource
-                      élément                 
+  d\'Apprentissage)   suivie --- 1 seul       ressource. Peut être
+                      élément                 verrouillée (mode linéaire)
   ---------------------------------------------------------------------------
 
 **3.2 Modes de parcours**
 
--   Linéaire : le module N doit être terminé pour déverrouiller le
-    module N+1
+-   Linéaire : à l\'intérieur d\'une formation, l\'UA N doit être
+    terminée pour déverrouiller l\'UA N+1 dans un même module, et le
+    module N doit être terminé pour déverrouiller le module N+1
 
 -   Non linéaire : accès libre à tous les modules
 
@@ -395,7 +396,8 @@ côté apprenant.
 -   Duplication de modules avec leurs ressources
 
 -   Paramétrage du mode de parcours (linéaire / non linéaire) par
-    formation
+    formation --- le mode linéaire s\'applique simultanément aux
+    modules ET aux UAs au sein de chaque module
 
 -   Gestion des quiz : types autorisés, auto-correction QCM/VF,
     tentatives illimitées, historisation
@@ -721,6 +723,10 @@ Des tableaux de bord simples sont disponibles pour Admin et Formateur
 
 -   ✅ L\'accès est impossible si la date Dendreo est dépassée
 
+-   ✅ En mode linéaire, une UA non précédée d\'une UA terminée
+    retourne 403 si accédée directement par URL, et affiche un cadenas
+    dans la liste
+
 **12.2 Vidéo**
 
 -   ✅ La vidéo reprend exactement au dernier point de lecture après
@@ -820,6 +826,25 @@ Des tableaux de bord simples sont disponibles pour Admin et Formateur
                                Mise à jour §12.5 (critère d\'acceptance).
                                Ajout entrée glossaire
                                extranet_autologin_url
+
+  V1.2          2 mai 2026     Extension du mode parcours linéaire aux
+                               UAs : §3.1 (UA peut être verrouillée),
+                               §3.2 (règle de déverrouillage UA N → UA
+                               N+1 dans un même module), §7.1
+                               (paramétrage simultané modules + UAs),
+                               §12.1 (critère d\'acceptance 403 sur UA
+                               non précédée d\'une UA terminée)
   -----------------------------------------------------------------------
 
-*--- Fin du document PRD LMS --- The Artist Academy V1.1 ---*
+**Historique des versions**
+
+-   V1.0 --- Avril 2026 --- Version initiale
+
+-   V1.1 --- Mai 2026 --- Précisions §7.5 sur l\'architecture du lien
+    dans les emails de relance (extranet_autologin_url Dendreo)
+
+-   V1.2 --- 2 mai 2026 --- Extension du mode parcours linéaire aux
+    UAs (déverrouillage UA par UA au sein de chaque module en plus du
+    déverrouillage module par module)
+
+*--- Fin du document PRD LMS --- The Artist Academy V1.2 ---*

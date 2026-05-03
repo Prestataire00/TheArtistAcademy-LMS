@@ -50,7 +50,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error?.message || `HTTP ${res.status}`);
+    const err = new Error(data?.error?.message || `HTTP ${res.status}`) as Error & {
+      status?: number;
+      code?: string;
+    };
+    err.status = res.status;
+    err.code = data?.error?.code;
+    throw err;
   }
 
   // 204 No Content — pas de body

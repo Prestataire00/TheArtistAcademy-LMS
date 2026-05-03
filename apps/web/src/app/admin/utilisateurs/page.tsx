@@ -1,10 +1,16 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/admin/ToastContext';
 import { ResponsiveList } from '@/components/ResponsiveList';
+import { SearchInput } from '@/components/SearchInput';
+import { SortableHeader } from '@/components/SortableHeader';
+import { FilterPanel } from '@/components/FilterPanel';
+import { Pagination } from '@/components/Pagination';
+import { matchesSearch } from '@/lib/search';
+import { useTableState, sortItems, type FilterDef } from '@/lib/useTableState';
 
 interface StaffUser {
   id: string;
@@ -16,6 +22,28 @@ interface StaffUser {
   lastSeenAt: string | null;
 }
 
+const FILTER_DEFS: FilterDef[] = [
+  {
+    type: 'multi',
+    key: 'role',
+    label: 'Rôle',
+    options: [
+      { value: 'admin', label: 'Admin' },
+      { value: 'trainer', label: 'Formateur' },
+      { value: 'learner', label: 'Apprenant' },
+    ],
+  },
+  { type: 'dateRange', key: 'createdAt', label: 'Date de création' },
+];
+
+const SORT_ACCESSORS: Record<string, (u: StaffUser) => unknown> = {
+  fullName: (u) => u.fullName,
+  email: (u) => u.email,
+  role: (u) => u.role,
+  createdAt: (u) => new Date(u.createdAt).getTime(),
+  lastSeenAt: (u) => (u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : null),
+};
+
 export default function AdminUtilisateursPage() {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +51,39 @@ export default function AdminUtilisateursPage() {
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { showToast } = useToast();
+
+  const t = useTableState({ filterDefs: FILTER_DEFS, pageSize: 50 });
+
+  const filtered = useMemo(() => {
+    const roleFilter = (t.filters.role as string[]) ?? [];
+    const dateRange = (t.filters.createdAt as { from?: string; to?: string }) ?? {};
+    const fromTs = dateRange.from ? new Date(dateRange.from).getTime() : null;
+    const toTs = dateRange.to ? new Date(dateRange.to).getTime() + 86_400_000 - 1 : null;
+
+    return users.filter((u) => {
+      if (!matchesSearch(t.search, [u.fullName, u.email])) return false;
+      if (roleFilter.length > 0 && !roleFilter.includes(u.role)) return false;
+      const created = new Date(u.createdAt).getTime();
+      if (fromTs !== null && created < fromTs) return false;
+      if (toTs !== null && created > toTs) return false;
+      return true;
+    });
+  }, [users, t.search, t.filters]);
+
+  const sorted = useMemo(() => sortItems(filtered, t.sort, SORT_ACCESSORS), [filtered, t.sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / t.pageSize));
+  const paginated = useMemo(
+    () => sorted.slice(t.page * t.pageSize, (t.page + 1) * t.pageSize),
+    [sorted, t.page, t.pageSize],
+  );
+
+  // Si la page courante dépasse le total après filtrage, repli sur la dernière.
+  useEffect(() => {
+    if (t.page > 0 && t.page >= totalPages) t.setPage(totalPages - 1);
+  }, [t.page, totalPages, t.setPage]);
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -120,13 +180,62 @@ export default function AdminUtilisateursPage() {
         />
       )}
 
+      <div className="mb-4 flex items-center gap-3 flex-wrap">
+        <SearchInput
+          value={t.searchInput}
+          onChange={t.setSearchInput}
+          placeholder="Rechercher par nom ou email..."
+        />
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={`inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors ${
+            t.activeFilterCount > 0 || filtersOpen
+              ? 'bg-brand-50 border-brand-300 text-brand-700'
+              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+          }`}
+          aria-expanded={filtersOpen}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18l-7 9v6l-4 2v-8L3 4z" />
+          </svg>
+          Filtres{t.activeFilterCount > 0 ? ` (${t.activeFilterCount})` : ''}
+        </button>
+        <span className="ml-auto text-sm text-gray-500">
+          {sorted.length} / {users.length} utilisateurs
+        </span>
+      </div>
+
+      {filtersOpen && (
+        <div className="mb-4">
+          <FilterPanel
+            open={filtersOpen}
+            filters={FILTER_DEFS}
+            values={t.filters}
+            onChange={t.setFilter}
+            onReset={t.resetFilters}
+            activeCount={t.activeFilterCount}
+          />
+        </div>
+      )}
+
       {users.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <p className="text-gray-400">Aucun utilisateur admin ou formateur.</p>
         </div>
+      ) : sorted.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <p className="text-gray-500 mb-3">Aucun résultat</p>
+          <button
+            onClick={t.resetSearchAndFilters}
+            className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+          >
+            Effacer les filtres
+          </button>
+        </div>
       ) : (
         <ResponsiveList<StaffUser>
-          items={users}
+          items={paginated}
           rowKey={(u) => u.id}
           titleKey={(u) => (
             editingName === u.id ? (
@@ -155,7 +264,10 @@ export default function AdminUtilisateursPage() {
           )}
           columns={[
             {
-              key: 'name', label: 'Nom', mobileHidden: true,
+              key: 'name',
+              mobileLabel: 'Nom',
+              label: <SortableHeader field="fullName" label="Nom" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              mobileHidden: true,
               render: (u) => (
                 editingName === u.id ? (
                   <input
@@ -175,11 +287,16 @@ export default function AdminUtilisateursPage() {
               ),
             },
             {
-              key: 'email', label: 'Email', mobileHidden: true,
+              key: 'email',
+              mobileLabel: 'Email',
+              label: <SortableHeader field="email" label="Email" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              mobileHidden: true,
               render: (u) => <span className="text-gray-500">{u.email}</span>,
             },
             {
-              key: 'role', label: 'Rôle',
+              key: 'role',
+              mobileLabel: 'Rôle',
+              label: <SortableHeader field="role" label="Rôle" currentSort={t.sort} onSortChange={t.cycleSort} />,
               render: (u) => (
                 <select
                   value={u.role}
@@ -192,11 +309,15 @@ export default function AdminUtilisateursPage() {
               ),
             },
             {
-              key: 'created', label: 'Créé le',
+              key: 'created',
+              mobileLabel: 'Créé le',
+              label: <SortableHeader field="createdAt" label="Créé le" currentSort={t.sort} onSortChange={t.cycleSort} />,
               render: (u) => <span className="text-gray-500 text-xs">{formatDate(u.createdAt)}</span>,
             },
             {
-              key: 'lastSeen', label: 'Dernière connexion',
+              key: 'lastSeen',
+              mobileLabel: 'Dernière connexion',
+              label: <SortableHeader field="lastSeenAt" label="Dernière connexion" currentSort={t.sort} onSortChange={t.cycleSort} />,
               render: (u) => <span className="text-gray-500 text-xs">{formatDate(u.lastSeenAt)}</span>,
             },
             {
@@ -216,6 +337,10 @@ export default function AdminUtilisateursPage() {
             </>
           )}
         />
+      )}
+
+      {sorted.length > t.pageSize && (
+        <Pagination page={t.page} totalPages={totalPages} onPageChange={t.setPage} />
       )}
     </div>
   );

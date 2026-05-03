@@ -22,13 +22,17 @@ export default function UAPage() {
   const [ua, setUA] = useState<UAData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!params.id) return;
     setLoading(true);
     api.get<{ data: UAData }>(`/player/uas/${params.id}`)
       .then((res) => setUA(res.data))
-      .catch((err) => setError(err.message))
+      .catch((err: Error & { code?: string; status?: number }) => {
+        setError(err.message);
+        setErrorCode(err.code ?? null);
+      })
       .finally(() => setLoading(false));
   }, [params.id]);
 
@@ -38,6 +42,26 @@ export default function UAPage() {
         <div className="flex items-center gap-3 text-gray-500">
           <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
           Chargement...
+        </div>
+      </div>
+    );
+  }
+
+  if (errorCode === 'UA_LOCKED') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
+        <div className="text-center max-w-md">
+          <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Cette unité n&apos;est pas encore accessible</h1>
+          <p className="text-gray-500 mb-6">Termine l&apos;unité précédente pour débloquer celle-ci.</p>
+          <button
+            onClick={() => router.back()}
+            className="inline-block px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+          >
+            Retour à la formation
+          </button>
         </div>
       </div>
     );

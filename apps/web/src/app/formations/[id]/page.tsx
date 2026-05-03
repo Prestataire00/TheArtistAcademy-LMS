@@ -44,6 +44,7 @@ interface FormationPageData {
       type: UAType;
       position: number;
       status: CompletionStatus;
+      isLocked: boolean;
     }>;
   }>;
 }
@@ -353,21 +354,39 @@ function ModuleCard({ module: mod }: ModuleCardProps) {
           <ul className="space-y-0.5">
             {mod.uas.map((ua) => (
               <li key={ua.id}>
-                <a
-                  href={`/uas/${ua.id}`}
-                  className="flex items-center gap-2 px-2 py-3 rounded-md hover:bg-gray-50 transition-colors group min-h-[44px]"
-                >
-                  <UAIcon type={ua.type} status={ua.status} />
-                  <span
-                    className={`flex-1 text-sm truncate ${
-                      ua.status === 'completed' ? 'text-gray-500' : 'text-gray-900'
-                    } group-hover:text-brand-700 transition-colors`}
-                    title={ua.title}
+                {ua.isLocked ? (
+                  <div
+                    className="flex items-center gap-2 px-2 py-3 rounded-md min-h-[44px] opacity-60 cursor-not-allowed"
+                    title="Termine l'unité précédente pour débloquer"
+                    aria-disabled="true"
                   >
-                    {ua.title}
-                  </span>
-                  <span className="text-xs text-gray-400 capitalize flex-shrink-0">{ua.type}</span>
-                </a>
+                    <UAIcon type={ua.type} status={ua.status} />
+                    <span
+                      className="flex-1 text-sm truncate text-gray-500"
+                      title="Termine l'unité précédente pour débloquer"
+                    >
+                      {ua.title}
+                    </span>
+                    <LockIcon />
+                    <span className="text-xs text-gray-400 capitalize flex-shrink-0">{ua.type}</span>
+                  </div>
+                ) : (
+                  <a
+                    href={`/uas/${ua.id}`}
+                    className="flex items-center gap-2 px-2 py-3 rounded-md hover:bg-gray-50 transition-colors group min-h-[44px]"
+                  >
+                    <UAIcon type={ua.type} status={ua.status} />
+                    <span
+                      className={`flex-1 text-sm truncate ${
+                        ua.status === 'completed' ? 'text-gray-500' : 'text-gray-900'
+                      } group-hover:text-brand-700 transition-colors`}
+                      title={ua.title}
+                    >
+                      {ua.title}
+                    </span>
+                    <span className="text-xs text-gray-400 capitalize flex-shrink-0">{ua.type}</span>
+                  </a>
+                )}
               </li>
             ))}
           </ul>

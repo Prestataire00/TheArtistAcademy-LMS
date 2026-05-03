@@ -4,7 +4,9 @@ import type { ReactNode } from 'react';
 
 export type Column<T> = {
   key: string;
-  label: string;
+  label: ReactNode;
+  /** Texte simple utilisé en mobile et pour aria-label si label est un ReactNode. */
+  mobileLabel?: string;
   render: (item: T) => ReactNode;
   mobileHidden?: boolean;
   align?: 'left' | 'center' | 'right';
@@ -94,7 +96,7 @@ export function ResponsiveList<T>({
                 .filter((c) => !c.mobileHidden)
                 .map((c) => (
                   <div key={c.key} className="text-sm">
-                    <div className="text-[11px] text-gray-400 mb-0.5">{c.label}</div>
+                    <div className="text-[11px] text-gray-400 mb-0.5">{c.mobileLabel ?? c.label}</div>
                     <div className="text-gray-700">{c.render(item)}</div>
                   </div>
                 ))}
