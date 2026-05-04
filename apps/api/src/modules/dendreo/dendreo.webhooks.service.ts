@@ -6,6 +6,21 @@ import { logger } from '../../shared/logger';
 import { sendProgressionToDendreo } from './dendreo.progression.service';
 import { fetchDendreoParticipant } from './dendreo.api.client';
 
+/**
+ * Convertit un identifiant externe Dendreo en string ou null.
+ * Dendreo envoie ses ids en INT(11) (external_id, session_id, enrolment_id),
+ * mais le schéma Prisma stocke en String? pour homogénéiser avec d'autres TMS.
+ *
+ * Comportement :
+ *   - undefined / null  -> null
+ *   - 0                 -> "0"   (PAS null — 0 est un id valide)
+ *   - 12345             -> "12345"
+ *   - "12345"           -> "12345"
+ */
+export function toExternalIdString(value: unknown): string | null {
+  return value != null ? String(value) : null;
+}
+
 // ─── Users webhook ───────────────────────────────────────────────────────────
 
 interface UserWebhookPayload {
@@ -19,9 +34,9 @@ interface UserWebhookPayload {
     password?: string;
     send_credentials?: boolean;
     tms_origin?: string;
-    external_id?: string;
+    external_id?: string | number;
     // Ancien format compat (full_name + id)
-    id?: string;
+    id?: string | number;
     full_name?: string;
     email: string;
   };
@@ -33,7 +48,8 @@ export async function handleUserWebhook(payload: UserWebhookPayload) {
   }
 
   const d = payload.data;
-  const externalId = d.external_id ?? d.id;
+  // Dendreo envoie external_id/id en INT(11) — caster en string pour Prisma.
+  const externalId = toExternalIdString(d.external_id ?? d.id);
   const fullName = d.full_name ?? [d.firstname, d.lastname].filter(Boolean).join(' ').trim();
   const tmsOrigin = d.tms_origin ?? 'dendreo';
 
@@ -85,8 +101,8 @@ interface SessionWebhookPayload {
   tenant_id?: string;
   data: {
     training_id: string;
-    session_id?: string;     // utilisé pour update/delete
-    external_id?: string;    // alias session_id si Dendreo l'envoie ainsi
+    session_id?: string | number;  // INT(11) côté Dendreo
+    external_id?: string | number; // alias session_id si Dendreo l'envoie ainsi
     start_date?: string;
     end_date?: string;
     tms_origin?: string;
@@ -96,7 +112,8 @@ interface SessionWebhookPayload {
 
 export async function handleSessionWebhook(payload: SessionWebhookPayload) {
   const { event, data } = payload;
-  const externalId = data.session_id ?? data.external_id;
+  // Caster en string : Dendreo envoie session_id/external_id en INT(11)
+  const externalId = toExternalIdString(data.session_id ?? data.external_id);
 
   if (event === 'session.deleted') {
     if (!externalId) throw new BadRequestError('session_id requis pour delete');
@@ -169,21 +186,23 @@ interface EnrolmentWebhookPayload {
   timestamp?: string;
   tenant_id?: string;
   data: {
-    enrolment_id?: string;
+    enrolment_id?: string | number;  // INT(11) côté Dendreo
     training_id: string;
-    session_id?: string;
+    session_id?: string | number;    // INT(11) côté Dendreo
     user_id: string;
     start_date: string;
     end_date: string;
     send_notification?: boolean;
     tms_origin?: string;
-    external_id?: string;
+    external_id?: string | number;   // INT(11) côté Dendreo
   };
 }
 
 export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
   const { event, data } = payload;
-  const dendreoEnrolmentId = data.enrolment_id ?? data.external_id;
+  // Caster en string : Dendreo envoie enrolment_id/external_id/session_id en INT(11)
+  const dendreoEnrolmentId = toExternalIdString(data.enrolment_id ?? data.external_id);
+  const dendreoSessionId = toExternalIdString(data.session_id);
 
   if (!data.user_id) {
     throw new BadRequestError('user_id est requis');
@@ -231,7 +250,7 @@ export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
       where: { dendreoEnrolmentId },
       update: {
         formationId: data.training_id,
-        dendreoSessionId: data.session_id ?? null,
+        dendreoSessionId,
         startDate,
         endDate,
         status,
@@ -240,7 +259,7 @@ export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
         userId: data.user_id,
         formationId: data.training_id,
         dendreoEnrolmentId,
-        dendreoSessionId: data.session_id ?? null,
+        dendreoSessionId,
         tmsOrigin,
         startDate,
         endDate,
@@ -258,13 +277,13 @@ export async function handleEnrolmentWebhook(payload: EnrolmentWebhookPayload) {
     enrollment = existing
       ? await prisma.enrollment.update({
           where: { id: existing.id },
-          data: { startDate, endDate, status, dendreoSessionId: data.session_id ?? null },
+          data: { startDate, endDate, status, dendreoSessionId },
         })
       : await prisma.enrollment.create({
           data: {
             userId: data.user_id,
             formationId: data.training_id,
-            dendreoSessionId: data.session_id ?? null,
+            dendreoSessionId,
             tmsOrigin,
             startDate,
             endDate,
