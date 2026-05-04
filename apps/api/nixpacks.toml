@@ -4,8 +4,10 @@
 # - Railway injecte NODE_ENV=production -> `npm i` standard saute les devDependencies
 #   -> tsc et prisma CLI absents -> `npm run build` echoue avec "tsc: not found".
 #   Fix : `--include=dev` pour installer les devDependencies meme en production.
-# - Node 20 (coherent avec apps/web). Node 18 marche aussi pour l'API mais on
-#   standardise sur 20 pour eviter les surprises de compat.
+# - Node 22 (coherent avec apps/web). Requis par @supabase/realtime-js qui
+#   exige le WebSocket natif disponible seulement a partir de Node 22 ;
+#   sous Node 20 le client Supabase crashe au demarrage ("Node.js 20
+#   detected without native WebSocket support").
 # - openssl est requis par Prisma (le nixpkgs par defaut l'incluait deja, on le
 #   mentionne explicitement pour le fixer).
 # - `cacheDirectories = []` : meme garde-fou que le web (evite les cache mounts
@@ -14,10 +16,10 @@
 providers = ["node"]
 
 [variables]
-NIXPACKS_NODE_VERSION = "20"
+NIXPACKS_NODE_VERSION = "22"
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm-10_x", "openssl"]
+nixPkgs = ["nodejs_22", "npm-10_x", "openssl"]
 
 [phases.install]
 cmds = ["npm install --include=dev --legacy-peer-deps"]
