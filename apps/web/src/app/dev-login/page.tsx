@@ -43,7 +43,7 @@ export default function DevLoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emails[role], role, fullName: names[role] }),
+        body: JSON.stringify({ email: emails[role], roles: [role], fullName: names[role] }),
       });
 
       if (!res.ok) {

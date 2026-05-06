@@ -16,11 +16,25 @@ interface StaffUser {
   id: string;
   email: string;
   fullName: string;
-  role: string;
+  roles: string[];
   isActive: boolean;
   createdAt: string;
   lastSeenAt: string | null;
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  trainer: 'Formateur',
+  learner: 'Apprenant',
+  superadmin: 'Superadmin',
+};
+
+const ROLE_BADGE_CLASSES: Record<string, string> = {
+  admin: 'bg-brand-50 text-brand-700',
+  trainer: 'bg-blue-50 text-blue-700',
+  learner: 'bg-gray-100 text-gray-700',
+  superadmin: 'bg-purple-50 text-purple-700',
+};
 
 const FILTER_DEFS: FilterDef[] = [
   {
@@ -39,7 +53,7 @@ const FILTER_DEFS: FilterDef[] = [
 const SORT_ACCESSORS: Record<string, (u: StaffUser) => unknown> = {
   fullName: (u) => u.fullName,
   email: (u) => u.email,
-  role: (u) => u.role,
+  role: (u) => u.roles.slice().sort().join(','),
   createdAt: (u) => new Date(u.createdAt).getTime(),
   lastSeenAt: (u) => (u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : null),
 };
@@ -64,7 +78,7 @@ export default function AdminUtilisateursPage() {
 
     return users.filter((u) => {
       if (!matchesSearch(t.search, [u.fullName, u.email])) return false;
-      if (roleFilter.length > 0 && !roleFilter.includes(u.role)) return false;
+      if (roleFilter.length > 0 && !u.roles.some((r) => roleFilter.includes(r))) return false;
       const created = new Date(u.createdAt).getTime();
       if (fromTs !== null && created < fromTs) return false;
       if (toTs !== null && created > toTs) return false;
@@ -109,9 +123,14 @@ export default function AdminUtilisateursPage() {
   }
 
   async function handleRoleChange(user: StaffUser, newRole: string) {
+    // Le sélecteur radio admin/trainer remplace l'ensemble des rôles staff
+    // mais préserve un éventuel 'learner' (utile pour un staff qui se teste
+    // aussi en apprenant — cas classique multi-rôles).
+    const preserved = user.roles.filter((r) => r !== 'admin' && r !== 'trainer');
+    const newRoles = [newRole, ...preserved];
     try {
-      await api.put(`/admin/utilisateurs/${user.id}`, { role: newRole });
-      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u));
+      await api.put(`/admin/utilisateurs/${user.id}`, { roles: newRoles });
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, roles: newRoles } : u));
       showToast(`Rôle de ${user.fullName} mis à jour`, 'success');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Erreur', 'error');
@@ -256,10 +275,17 @@ export default function AdminUtilisateursPage() {
           )}
           subtitleKey={(u) => <span className="truncate block">{u.email}</span>}
           badgeKey={(u) => (
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
-              u.role === 'admin' ? 'bg-brand-50 text-brand-700' : 'bg-blue-50 text-blue-700'
-            }`}>
-              {u.role === 'admin' ? 'Admin' : 'Formateur'}
+            <span className="flex flex-wrap gap-1">
+              {u.roles.map((r) => (
+                <span
+                  key={r}
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+                    ROLE_BADGE_CLASSES[r] ?? 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  {ROLE_LABELS[r] ?? r}
+                </span>
+              ))}
             </span>
           )}
           columns={[
@@ -297,16 +323,21 @@ export default function AdminUtilisateursPage() {
               key: 'role',
               mobileLabel: 'Rôle',
               label: <SortableHeader field="role" label="Rôle" currentSort={t.sort} onSortChange={t.cycleSort} />,
-              render: (u) => (
-                <select
-                  value={u.role}
-                  onChange={(e) => handleRoleChange(u, e.target.value)}
-                  className="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white"
-                >
-                  <option value="admin">Admin</option>
-                  <option value="trainer">Formateur</option>
-                </select>
-              ),
+              render: (u) => {
+                // Le sélecteur ne pilote que le rôle staff (admin|trainer).
+                // Si le user n'a aucun des deux on tombe sur 'trainer' par défaut.
+                const staffRole = u.roles.includes('admin') ? 'admin' : 'trainer';
+                return (
+                  <select
+                    value={staffRole}
+                    onChange={(e) => handleRoleChange(u, e.target.value)}
+                    className="text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white"
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="trainer">Formateur</option>
+                  </select>
+                );
+              },
             },
             {
               key: 'created',
@@ -368,7 +399,7 @@ function CreateUserSlideOver({ onSave, onClose, onError }: {
     }
     setSaving(true);
     try {
-      await api.post('/admin/utilisateurs', { fullName, email, password, role });
+      await api.post('/admin/utilisateurs', { fullName, email, password, roles: [role] });
       onSave();
     } catch (err: unknown) {
       onError(err instanceof Error ? err.message : 'Erreur');

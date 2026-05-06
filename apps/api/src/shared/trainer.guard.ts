@@ -14,7 +14,7 @@ export function verifyTrainerOwnership() {
       if (!user) return next(new ForbiddenError());
 
       // Admin/superadmin : pas de restriction
-      if (user.role === 'admin' || user.role === 'superadmin') {
+      if (user.roles.some((r) => r === 'admin' || r === 'superadmin')) {
         return next();
       }
 

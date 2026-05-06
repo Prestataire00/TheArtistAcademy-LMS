@@ -46,7 +46,7 @@ async function main() {
     create: {
       email: 'test@artistacademy.fr',
       fullName: 'Test Apprenant',
-      role: 'learner',
+      roles: ['learner'],
       lastSeenAt: now,
     },
   });
@@ -144,7 +144,7 @@ async function main() {
   const alice = await prisma.user.upsert({
     where: { email: 'alice@test.fr' },
     update: { lastSeenAt: now },
-    create: { email: 'alice@test.fr', fullName: 'Alice Martin', role: 'learner', lastSeenAt: now },
+    create: { email: 'alice@test.fr', fullName: 'Alice Martin', roles: ['learner'], lastSeenAt: now },
   });
 
   const aliceEnroll1 = await prisma.enrollment.create({
@@ -171,7 +171,7 @@ async function main() {
   const bob = await prisma.user.upsert({
     where: { email: 'bob@test.fr' },
     update: { lastSeenAt: now },
-    create: { email: 'bob@test.fr', fullName: 'Bob Dupont', role: 'learner', lastSeenAt: now },
+    create: { email: 'bob@test.fr', fullName: 'Bob Dupont', roles: ['learner'], lastSeenAt: now },
   });
 
   const bobEnroll = await prisma.enrollment.create({
@@ -234,7 +234,7 @@ async function main() {
   const eva = await prisma.user.upsert({
     where: { email: 'eva.lambert@live.fr' },
     update: { lastSeenAt: now },
-    create: { email: 'eva.lambert@live.fr', fullName: 'Eva Lambert', role: 'learner', lastSeenAt: now },
+    create: { email: 'eva.lambert@live.fr', fullName: 'Eva Lambert', roles: ['learner'], lastSeenAt: now },
   });
 
   let evaEnroll = await prisma.enrollment.findFirst({
@@ -301,7 +301,7 @@ async function main() {
     create: {
       email: 'formateur@the-artist-academy.fr',
       fullName: 'Formateur TAA',
-      role: 'trainer',
+      roles: ['trainer'],
       lastSeenAt: now,
     },
   });

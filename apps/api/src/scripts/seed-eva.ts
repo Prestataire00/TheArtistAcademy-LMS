@@ -29,7 +29,7 @@ async function main() {
   const eva = await prisma.user.upsert({
     where: { email: 'eva.lambert@live.fr' },
     update: { lastSeenAt: now },
-    create: { email: 'eva.lambert@live.fr', fullName: 'Eva Lambert', role: 'learner', lastSeenAt: now },
+    create: { email: 'eva.lambert@live.fr', fullName: 'Eva Lambert', roles: ['learner'], lastSeenAt: now },
   });
 
   // Enrollment idempotent

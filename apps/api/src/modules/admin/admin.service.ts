@@ -6,7 +6,7 @@ import { prisma } from '../../config/database';
  */
 export async function listTrainers() {
   return prisma.user.findMany({
-    where: { role: 'trainer', isActive: true },
+    where: { roles: { has: 'trainer' }, isActive: true },
     select: { id: true, fullName: true, email: true },
     orderBy: { fullName: 'asc' },
   });

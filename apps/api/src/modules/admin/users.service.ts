@@ -1,18 +1,23 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { UserRole } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { NotFoundError, BadRequestError, ForbiddenError, ConflictError } from '../../shared/errors';
 
-const STAFF_ROLES = ['admin', 'trainer'] as const;
+const STAFF_ROLES: readonly UserRole[] = ['admin', 'trainer'] as const;
+
+function hasAnyStaffRole(roles: UserRole[]): boolean {
+  return roles.some((r) => STAFF_ROLES.includes(r));
+}
 
 export async function listStaffUsers() {
   return prisma.user.findMany({
-    where: { role: { in: [...STAFF_ROLES] } },
+    where: { roles: { hasSome: [...STAFF_ROLES] } },
     select: {
       id: true,
       email: true,
       fullName: true,
-      role: true,
+      roles: true,
       isActive: true,
       createdAt: true,
       lastSeenAt: true,
@@ -25,7 +30,7 @@ export async function createStaffUser(data: {
   email: string;
   fullName: string;
   password: string;
-  role: 'admin' | 'trainer';
+  roles: UserRole[];
 }) {
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) throw new ConflictError('Un utilisateur avec cet email existe deja');
@@ -37,13 +42,13 @@ export async function createStaffUser(data: {
       email: data.email,
       fullName: data.fullName,
       passwordHash,
-      role: data.role,
+      roles: data.roles,
     },
     select: {
       id: true,
       email: true,
       fullName: true,
-      role: true,
+      roles: true,
       isActive: true,
       createdAt: true,
       lastSeenAt: true,
@@ -53,19 +58,19 @@ export async function createStaffUser(data: {
 
 export async function updateStaffUser(
   id: string,
-  data: { role?: 'admin' | 'trainer'; fullName?: string; resetPassword?: boolean },
+  data: { roles?: UserRole[]; fullName?: string; resetPassword?: boolean },
 ) {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new NotFoundError('Utilisateur');
-  if (!STAFF_ROLES.includes(user.role as any)) {
+  if (!hasAnyStaffRole(user.roles)) {
     throw new BadRequestError('Seuls les comptes admin/trainer peuvent etre modifies ici');
   }
 
   let tempPassword: string | null = null;
   const updateData: Record<string, unknown> = {};
 
-  if (data.role) {
-    updateData.role = data.role;
+  if (data.roles) {
+    updateData.roles = data.roles;
   }
 
   if (data.fullName) {
@@ -84,7 +89,7 @@ export async function updateStaffUser(
       id: true,
       email: true,
       fullName: true,
-      role: true,
+      roles: true,
       isActive: true,
       createdAt: true,
       lastSeenAt: true,
@@ -101,7 +106,7 @@ export async function deleteStaffUser(id: string, currentUserId: string) {
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new NotFoundError('Utilisateur');
-  if (!STAFF_ROLES.includes(user.role as any)) {
+  if (!hasAnyStaffRole(user.roles)) {
     throw new BadRequestError('Seuls les comptes admin/trainer peuvent etre supprimes ici');
   }
 

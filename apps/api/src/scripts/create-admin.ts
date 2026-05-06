@@ -37,6 +37,7 @@ async function main() {
   const email = args.email;
   const password = args.password;
   const role = args.role === 'trainer' ? 'trainer' : 'admin';
+  const roles: ('admin' | 'trainer')[] = [role];
   const fullName = args.name || email.split('@')[0];
 
   if (password.length < 8) {
@@ -48,14 +49,14 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email },
-    update: { passwordHash, role, fullName, isActive: true },
-    create: { email, passwordHash, fullName, role, isActive: true },
+    update: { passwordHash, roles, fullName, isActive: true },
+    create: { email, passwordHash, fullName, roles, isActive: true },
   });
 
   console.log(`Compte cree/mis a jour :`);
   console.log(`  ID    : ${user.id}`);
   console.log(`  Email : ${user.email}`);
-  console.log(`  Role  : ${user.role}`);
+  console.log(`  Roles : ${user.roles.join(', ')}`);
   console.log(`  Nom   : ${user.fullName}`);
 }
 

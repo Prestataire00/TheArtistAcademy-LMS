@@ -31,7 +31,8 @@ export async function handleForgotPassword(req: Request, res: Response) {
   // Toujours repondre le meme message (ne jamais confirmer/infirmer l'existence)
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (user && (user.role === 'admin' || user.role === 'trainer' || user.role === 'superadmin') && user.isActive) {
+  const isStaff = user?.roles.some((r) => r === 'admin' || r === 'trainer' || r === 'superadmin');
+  if (user && isStaff && user.isActive) {
     const token = crypto.randomUUID();
     const expires = new Date(Date.now() + 60 * 60 * 1000); // 1h
 

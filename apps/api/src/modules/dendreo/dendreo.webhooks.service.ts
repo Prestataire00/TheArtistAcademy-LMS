@@ -84,7 +84,7 @@ export async function handleUserWebhook(payload: UserWebhookPayload) {
       externalId,
       ...(dendreoUserId ? { dendreoUserId } : {}),
       tmsOrigin,
-      role: 'learner',
+      roles: ['learner'],
       ...(passwordHash ? { passwordHash } : {}),
     },
   });

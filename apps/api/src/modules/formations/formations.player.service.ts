@@ -22,7 +22,7 @@ export async function getPlayerFormation(userId: string, formationId: string) {
     // Diagnostic : logger ce que l'API voit en DB pour ce user
     const userExists = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, role: true },
+      select: { id: true, email: true, roles: true },
     });
     const allEnrollmentsForUser = await prisma.enrollment.findMany({
       where: { userId },

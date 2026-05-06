@@ -101,7 +101,7 @@ model User {
   passwordHash          String?   @map("password_hash")
   passwordResetToken    String?   @unique @map("password_reset_token")
   passwordResetExpires  DateTime? @map("password_reset_expires")
-  role                  UserRole  @default(learner)
+  roles                 UserRole[] @default([learner])
   tmsOrigin      String?   @map("tms_origin")
   isActive       Boolean   @default(true) @map("is_active")
   createdAt      DateTime  @default(now()) @map("created_at")
