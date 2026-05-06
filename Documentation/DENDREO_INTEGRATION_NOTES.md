@@ -20,13 +20,13 @@
 
 Trois secrets distincts coexistent côté Dendreo. Ne pas les confondre :
 
-| Variable | Rôle | Utilisé par |
+| Variable | Rôle | Configurée sur |
 |---|---|---|
-| `DENDREO_API_KEY` | Clé API Dendreo (axe LMS → Dendreo, ex : `participants.php`) | Service API LMS |
-| `DENDREO_SIGNATURE_KEY` | Clé du Connecteur LMS Universel — signe les webhooks `user/enrolment/session` **et** les JWT du SSO | Service API LMS |
+| `DENDREO_API_KEY` | Clé API Dendreo (axe LMS → Dendreo, ex : `participants.php`) | Service **API uniquement** |
+| `DENDREO_SIGNATURE_KEY` | Clé du Connecteur LMS Universel — signe les webhooks `user/enrolment/session` **et** les JWT du SSO | Service **API uniquement** |
 | `DENDREO_WEBHOOK_SECRET` | Clé d'un autre système de webhooks Dendreo | ❌ Non utilisé par le LMS |
 
-Toutes ces variables sont configurées sur Railway (services API et Web).
+> ⚠️ **Important** : ces secrets ne sont **PAS** exposés sur le service Web Railway, par principe de moindre exposition. Seules les variables `NEXT_PUBLIC_*` sont configurées côté Web (notamment `NEXT_PUBLIC_API_URL`).
 
 **Modes de transmission de la clé API** :
 
@@ -117,7 +117,7 @@ Au webhook `enrolment.created`, le LMS pull `extranet_autologin_url` via `GET /a
 ### Section "Réglage de la connexion"
 - **Nom du LMS** : `TAALMS`
 - **Tenant ID** : `taa-formation-test` *(sandbox — à renommer pour la prod)*
-- **Clé de signature** : copiée dans `DENDREO_SIGNATURE_KEY` (Railway API + Web)
+- **Clé de signature** : copiée dans `DENDREO_SIGNATURE_KEY` (Railway service API uniquement)
 
 ### Section "Accès API"
 - **URL endpoint Trainings** : `https://artist-academyapi-production.up.railway.app/api/v1/dendreo/trainings`
@@ -160,6 +160,14 @@ L'API Web et l'API LMS sont sur deux domaines Railway distincts (pas de cookie c
 - Nettoie l'URL (le token disparaît de la barre d'adresse, du `Referer`, des logs Next)
 - La page de relais `/sso/dendreo` reste fonctionnelle en fallback (chemin sans `return_to`, écrit en `localStorage` + Bearer header)
 
+### Note sur SameSite=Lax
+
+Le cookie est posé avec `SameSite=Lax`, ce qui fonctionne dans notre architecture **uniquement grâce à la rewrite Next.js** (`next.config.ts` rewrite `/api/v1/*` → `NEXT_PUBLIC_API_URL/api/v1/*`). Du point de vue du navigateur, les requêtes du Web vers l'API apparaissent comme **same-origin** et le cookie est donc bien envoyé.
+
+Sans cette rewrite (par exemple si le frontend appelait directement l'URL Railway de l'API), il aurait fallu passer le cookie en `SameSite=None; Secure` pour autoriser le cross-site, avec les implications CSRF associées.
+
+À garder en tête si l'architecture évolue (ex : déploiement séparé du frontend ou suppression de la rewrite).
+
 ---
 
 ## 9. Bugs résiduels à traiter avant la prod
@@ -168,7 +176,7 @@ L'API Web et l'API LMS sont sur deux domaines Railway distincts (pas de cookie c
 | --- | --- | --- | --- |
 | a | Sécurité | Endpoints webhooks renvoient `500` au lieu de `401` quand la signature HMAC est invalide | Sécurité par obscurité non respectée — fuite d'info sur l'existence du endpoint |
 | b | Race | Si `enrolment.created` arrive avant `session.created`, l'enrollment est créé sans `dendreo_session_id` | Observé sur l'enrolment EVA TEST `id 21519` — prévoir un backfill ou file d'attente |
-| c | Sécurité | `user.created` fait un upsert sur l'`email`. Un admin Dendreo partageant son email avec un participant verrait son rôle écrasé en `learner` | À refondre : matcher d'abord sur `dendreo_user_id`, ne jamais downgrade un rôle |
+| **c** | **🚨 BLOQUEUR PROD** | **`user.created` fait un upsert sur l'`email`. Un admin Dendreo partageant son email avec un participant verrait son rôle écrasé en `learner`** | **À refondre IMPÉRATIVEMENT avant prod : matcher d'abord sur `dendreo_user_id`, ne jamais downgrade un rôle existant. N'importe quelle inscription Dendreo avec un email d'admin LMS = compromission du compte admin.** |
 | d | Observabilité | Logging insuffisant des webhooks `user.created` et `enrolment.created` | Seul `session.created` produit un log structuré clair |
 | e | Données | `users.dendreo_user_id` reste NULL alors qu'elle devrait être renseignée | Fix dans le handler `user.created` |
 | f | Feature | Bouton "Retour à Dendreo" non implémenté dans l'UI LMS | Utiliser `dendreo_return_to` (cf. doc PDF Connecteur LMS Universel p.18) — cookie `dendreo_return_to` déjà posé par l'API SSO |
@@ -180,8 +188,10 @@ L'API Web et l'API LMS sont sur deux domaines Railway distincts (pas de cookie c
 - [x] ~~Marina : activer le Connecteur LMS Universel sur la sandbox~~ ✅ 06/05/2026
 - [x] ~~Configurer le formulaire connecteur avec les valeurs de §7~~ ✅
 - [x] ~~Tester le flow complet : participant sandbox → ADF → SSO depuis l'extranet → page formation~~ ✅
+- [ ] **Traiter le bloqueur prod (§9 bug c) — impératif avant tout go-live**
 - [ ] Implémenter le pull `extranet_autologin_url` au moment des relances email *(infra existante, à brancher sur le scheduler)*
-- [ ] Traiter les 6 bugs résiduels listés en §9
+- [ ] Traiter les autres bugs résiduels listés en §9 (a, b, d, e, f)
+- [ ] **Tester l'intégration sur la prod Dendreo** (avec un Participant + Module + ADF clairement marqués TEST), avant la bascule réelle des apprenants existants
 - [ ] Documenter la procédure de bascule sandbox → prod le jour du go-live
 - [ ] Renommer `tenant_id` `taa-formation-test` → valeur prod
 

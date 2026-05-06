@@ -725,12 +725,13 @@ export async function listReminderLogs(filters: { status?: string; formationId?:
     include: {
       user: { select: { fullName: true, email: true } },
       enrollment: { select: { formationId: true, formation: { select: { title: true } } } },
-      rule: { select: { name: true, delayDays: true, templateName: true } },
+      rule: { select: { id: true, name: true, delayDays: true, templateName: true } },
     },
   });
 
   return logs.map((l) => ({
     id: l.id,
+    ruleId: l.rule.id,
     ruleName: l.rule.name,
     ruleDelayDays: l.rule.delayDays,
     templateName: l.rule.templateName,

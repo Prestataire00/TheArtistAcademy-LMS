@@ -16,7 +16,7 @@ export async function listTrainers() {
  * Stats globales du dashboard admin.
  */
 export async function getDashboardStats() {
-  const [formationsCount, activeEnrollments, allEnrollments, publishedUAs] = await Promise.all([
+  const [formationsCount, activeEnrollments, allEnrollments, publishedUAs, quizAttempts] = await Promise.all([
     prisma.formation.count(),
     prisma.enrollment.count({ where: { status: 'active' } }),
     prisma.enrollment.findMany({
@@ -25,6 +25,15 @@ export async function getDashboardStats() {
     prisma.uA.findMany({
       where: { isPublished: true },
       select: { id: true, module: { select: { formationId: true } } },
+    }),
+    // Tentatives de quiz pour la moyenne par formation. scorePercent est null
+    // pour les quiz purement déclaratifs (réponses courtes uniquement).
+    prisma.quizAttempt.findMany({
+      where: { scorePercent: { not: null } },
+      select: {
+        scorePercent: true,
+        enrollment: { select: { formationId: true } },
+      },
     }),
   ]);
 
@@ -38,7 +47,13 @@ export async function getDashboardStats() {
 
   // Calcul completion globale
   let totalCompleted = 0;
-  const bySession = new Map<string, { title: string; learners: number; completed: number; totalProgress: number }>();
+  const bySession = new Map<string, {
+    title: string;
+    learners: number;
+    completed: number;
+    totalProgress: number;
+    totalTimeSpent: number;
+  }>();
 
   for (const enr of allEnrollments) {
     const fid = enr.formationId;
@@ -50,28 +65,48 @@ export async function getDashboardStats() {
     const isCompleted = totalUAs > 0 && done >= totalUAs;
     const progress = totalUAs > 0 ? (done / totalUAs) * 100 : 0;
 
+    // Temps cumulé par apprenant : somme des timeSpentSeconds des UAProgress.
+    const timeSpent = enr.uaProgresses.reduce((acc, p) => acc + (p.timeSpentSeconds ?? 0), 0);
+
     if (isCompleted) totalCompleted++;
 
     if (!bySession.has(fid)) {
-      bySession.set(fid, { title: enr.formation.title, learners: 0, completed: 0, totalProgress: 0 });
+      bySession.set(fid, { title: enr.formation.title, learners: 0, completed: 0, totalProgress: 0, totalTimeSpent: 0 });
     }
     const s = bySession.get(fid)!;
     s.learners++;
     if (isCompleted) s.completed++;
     s.totalProgress += progress;
+    s.totalTimeSpent += timeSpent;
+  }
+
+  // Score moyen par formation (sur tentatives auto-corrigées uniquement).
+  const quizByFormation = new Map<string, { sum: number; count: number }>();
+  for (const a of quizAttempts) {
+    if (a.scorePercent === null) continue;
+    const fid = a.enrollment.formationId;
+    const agg = quizByFormation.get(fid) ?? { sum: 0, count: 0 };
+    agg.sum += a.scorePercent;
+    agg.count += 1;
+    quizByFormation.set(fid, agg);
   }
 
   const totalEnrollments = allEnrollments.length;
   const globalCompletionRate = totalEnrollments > 0 ? Math.round((totalCompleted / totalEnrollments) * 100) : 0;
 
-  const sessions = Array.from(bySession.entries()).map(([formationId, s]) => ({
-    formationId,
-    title: s.title,
-    learnersCount: s.learners,
-    completedCount: s.completed,
-    completionRate: s.learners > 0 ? Math.round((s.completed / s.learners) * 100) : 0,
-    avgProgress: s.learners > 0 ? Math.round(s.totalProgress / s.learners) : 0,
-  }));
+  const sessions = Array.from(bySession.entries()).map(([formationId, s]) => {
+    const quiz = quizByFormation.get(formationId);
+    return {
+      formationId,
+      title: s.title,
+      learnersCount: s.learners,
+      completedCount: s.completed,
+      completionRate: s.learners > 0 ? Math.round((s.completed / s.learners) * 100) : 0,
+      avgProgress: s.learners > 0 ? Math.round(s.totalProgress / s.learners) : 0,
+      avgTimeSpentSeconds: s.learners > 0 ? Math.round(s.totalTimeSpent / s.learners) : 0,
+      avgQuizScore: quiz ? Math.round(quiz.sum / quiz.count) : null,
+    };
+  });
 
   return {
     formationsCount,

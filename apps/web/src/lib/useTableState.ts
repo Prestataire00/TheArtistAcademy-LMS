@@ -16,7 +16,7 @@ export type FilterDef =
       variant?: 'chips' | 'dropdown';
       placeholder?: string;
     }
-  | { type: 'dateRange'; key: string; label: string }
+  | { type: 'dateRange'; key: string; label: string; presets?: boolean }
   | {
       type: 'numericRange';
       key: string;
@@ -44,6 +44,7 @@ interface UseTableStateOptions {
   pageSize?: number;
   searchDebounceMs?: number;
   searchParam?: string;
+  sortParam?: string;
 }
 
 // ─── URL helpers ─────────────────────────────────────────────────────────────
@@ -137,17 +138,17 @@ function isFilterActive(def: FilterDef, value: FilterValue): boolean {
   return Boolean(value);
 }
 
-function readSortFromUrl(params: URLSearchParams): SortState {
-  const raw = params.get('sort');
+function readSortFromUrl(params: URLSearchParams, key: string): SortState {
+  const raw = params.get(key);
   if (!raw) return null;
   const [field, direction] = raw.split(':');
   if (!field || (direction !== 'asc' && direction !== 'desc')) return null;
   return { field, direction };
 }
 
-function writeSortToParams(sort: SortState, params: URLSearchParams) {
-  if (sort) params.set('sort', `${sort.field}:${sort.direction}`);
-  else params.delete('sort');
+function writeSortToParams(sort: SortState, params: URLSearchParams, key: string) {
+  if (sort) params.set(key, `${sort.field}:${sort.direction}`);
+  else params.delete(key);
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -159,6 +160,7 @@ export function useTableState(opts: UseTableStateOptions = {}) {
     pageSize = 50,
     searchDebounceMs = 200,
     searchParam = 'q',
+    sortParam = 'sort',
   } = opts;
 
   const filterDefsRef = useRef(filterDefs);
@@ -173,7 +175,7 @@ export function useTableState(opts: UseTableStateOptions = {}) {
 
   const [sort, setSortState] = useState<SortState>(() => {
     const p = readSearchParams();
-    return readSortFromUrl(p) ?? defaultSort;
+    return readSortFromUrl(p, sortParam) ?? defaultSort;
   });
 
   const [filters, setFilters] = useState<FilterValues>(() => {
@@ -187,10 +189,10 @@ export function useTableState(opts: UseTableStateOptions = {}) {
   const syncUrl = useCallback((s: string, sortValue: SortState, f: FilterValues) => {
     const params = readSearchParams();
     if (s) params.set(searchParam, s); else params.delete(searchParam);
-    writeSortToParams(sortValue, params);
+    writeSortToParams(sortValue, params, sortParam);
     writeFiltersToParams(filterDefsRef.current, f, params);
     writeSearchParams(params);
-  }, [searchParam]);
+  }, [searchParam, sortParam]);
 
   // Debounced search → committed search + URL
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

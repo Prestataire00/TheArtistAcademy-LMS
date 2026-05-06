@@ -8,6 +8,12 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/formatters';
 import { Modal } from '@/components/Modal';
 import { SlideOver } from '@/components/SlideOver';
+import { SearchInput } from '@/components/SearchInput';
+import { SortableHeader } from '@/components/SortableHeader';
+import { FilterPanel } from '@/components/FilterPanel';
+import { Pagination } from '@/components/Pagination';
+import { matchesSearch } from '@/lib/search';
+import { useTableState, sortItems, type FilterDef } from '@/lib/useTableState';
 
 // react-quill ne supporte pas SSR et a besoin de forwardRef pour exposer l'instance
 const ReactQuill = dynamic(
@@ -58,6 +64,7 @@ interface Template {
 
 interface ReminderLog {
   id: string;
+  ruleId: string;
   ruleName: string;
   ruleDelayDays: number;
   templateName: string;
@@ -120,6 +127,14 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 // ─── Onglet 1 : Regles ────────────────────────────────────────────────────────
 
+const RULE_SORT_ACCESSORS: Record<string, (r: Rule) => unknown> = {
+  name: (r) => r.name,
+  delayDays: (r) => r.delayDays,
+  sendHour: (r) => r.sendHour,
+  template: (r) => r.templateName,
+  isActive: (r) => (r.archivedAt ? 0 : (r.isActive ? 2 : 1)),
+};
+
 function RulesTab() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -128,6 +143,9 @@ function RulesTab() {
   const [editing, setEditing] = useState<Rule | null>(null);
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+
+  const t = useTableState({ filterDefs: [], pageSize: 200, sortParam: 'rulesSort' });
+  const sortedRules = useMemo(() => sortItems(rules, t.sort, RULE_SORT_ACCESSORS), [rules, t.sort]);
 
   async function reload() {
     setRefreshing(true);
@@ -183,7 +201,7 @@ function RulesTab() {
         <div className={`transition-opacity duration-150 ${refreshing ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
           {/* ─── Vue cartes (mobile) ─────────────────────────────── */}
           <ul className="md:hidden space-y-3">
-            {rules.map((r) => {
+            {sortedRules.map((r) => {
               const isArchived = !!r.archivedAt;
               return (
                 <li
@@ -237,16 +255,26 @@ function RulesTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Nom</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Delai</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Heure envoi</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Template</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Actif</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="name" label="Nom" currentSort={t.sort} onSortChange={t.cycleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="delayDays" label="Délai" currentSort={t.sort} onSortChange={t.cycleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="sendHour" label="Heure envoi" currentSort={t.sort} onSortChange={t.cycleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="template" label="Template" currentSort={t.sort} onSortChange={t.cycleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="isActive" label="Actif" currentSort={t.sort} onSortChange={t.cycleSort} />
+                  </th>
                   <th className="px-4 py-3 text-right font-medium text-gray-500"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {rules.map((r) => {
+                {sortedRules.map((r) => {
                   const isArchived = !!r.archivedAt;
                   return (
                     <tr key={r.id} className={`hover:bg-gray-50 ${isArchived ? 'opacity-60 bg-gray-50/50' : ''}`}>
@@ -388,12 +416,25 @@ function RuleModal({ rule, templates, onClose, onSaved }: { rule: Rule | null; t
 
 const VARIABLES = ['{{prenom}}', '{{nom}}', '{{formation}}', '{{modules_en_retard}}', '{{lien_formation}}'];
 
+const TEMPLATE_SORT_ACCESSORS: Record<string, (t: Template) => unknown> = {
+  name: (t) => t.name,
+  version: (t) => t.version,
+  subject: (t) => t.subject,
+  updatedAt: (t) => new Date(t.updatedAt).getTime(),
+};
+
 function TemplatesTab() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Template | null>(null);
   const [creating, setCreating] = useState(false);
   const [preview, setPreview] = useState<Template | null>(null);
+
+  const ts = useTableState({ filterDefs: [], pageSize: 200, sortParam: 'templatesSort' });
+  const sortedTemplates = useMemo(
+    () => sortItems(templates, ts.sort, TEMPLATE_SORT_ACCESSORS),
+    [templates, ts.sort],
+  );
 
   async function reload() {
     setLoading(true);
@@ -443,7 +484,7 @@ function TemplatesTab() {
         <>
           {/* ─── Vue cartes (mobile) ─────────────────────────────── */}
           <ul className="md:hidden space-y-3">
-            {templates.map((t) => (
+            {sortedTemplates.map((t) => (
               <li key={t.id} className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -475,15 +516,23 @@ function TemplatesTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Nom</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Version</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Sujet</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Maj</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="name" label="Nom" currentSort={ts.sort} onSortChange={ts.cycleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="version" label="Version" currentSort={ts.sort} onSortChange={ts.cycleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="subject" label="Sujet" currentSort={ts.sort} onSortChange={ts.cycleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    <SortableHeader field="updatedAt" label="Maj" currentSort={ts.sort} onSortChange={ts.cycleSort} />
+                  </th>
                   <th className="px-4 py-3 text-right font-medium text-gray-500"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {templates.map((t) => (
+                {sortedTemplates.map((t) => (
                   <tr key={t.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900 font-medium">{t.name}</td>
                     <td className="px-4 py-3 text-gray-600">v{t.version}</td>
@@ -860,56 +909,198 @@ function TemplatePreview({ template, onClose }: { template: Template; onClose: (
 
 // ─── Onglet 3 : Journal ───────────────────────────────────────────────────────
 
+function lastFirstKey(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 1) return name.toLowerCase();
+  const last = parts[parts.length - 1];
+  const first = parts.slice(0, -1).join(' ');
+  return `${last} ${first}`.toLowerCase();
+}
+
+const LOG_SORT_ACCESSORS: Record<string, (l: ReminderLog) => unknown> = {
+  date: (l) => new Date(l.sentAt).getTime(),
+  recipient: (l) => lastFirstKey(l.recipientName),
+  formation: (l) => l.formationTitle,
+  rule: (l) => l.ruleName,
+  status: (l) => l.status,
+};
+
+const STATUS_OPTIONS = [
+  { value: 'sent', label: 'Envoyé' },
+  { value: 'failed', label: 'Échec' },
+];
+
 function LogsTab() {
   const [logs, setLogs] = useState<ReminderLog[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
+  const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [formationFilter, setFormationFilter] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
-    api.get<{ data: { formations: Formation[] } }>('/admin/dashboard/sessions')
-      .then((res) => setFormations(res.data.formations))
-      .catch(() => {});
+    setLoading(true);
+    Promise.all([
+      api.get<{ data: ReminderLog[] }>('/admin/relances'),
+      api.get<{ data: { formations: Formation[] } }>('/admin/dashboard/sessions'),
+      api.get<{ data: Rule[] }>('/admin/relances/rules?includeArchived=1'),
+    ])
+      .then(([logsRes, sessionsRes, rulesRes]) => {
+        setLogs(logsRes.data);
+        setFormations(sessionsRes.data.formations);
+        setRules(rulesRes.data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
+  // Templates utilisés au moins une fois (dérivés des logs).
+  const templateOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const l of logs) {
+      const label = l.templateVersion ? `${l.templateName} v${l.templateVersion}` : l.templateName;
+      if (!seen.has(l.templateName)) seen.set(l.templateName, label);
+    }
+    return Array.from(seen.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [logs]);
+
+  const filterDefs = useMemo<FilterDef[]>(() => [
+    {
+      type: 'multi',
+      key: 'status',
+      label: 'Statut',
+      options: STATUS_OPTIONS,
+    },
+    {
+      type: 'multi',
+      key: 'formations',
+      label: 'Formation',
+      variant: 'dropdown',
+      placeholder: 'Toutes les formations',
+      options: formations.map((f) => ({ value: f.id, label: f.title })),
+    },
+    {
+      type: 'multi',
+      key: 'rules',
+      label: 'Règle',
+      variant: 'dropdown',
+      placeholder: 'Toutes les règles',
+      options: rules.map((r) => ({ value: r.id, label: r.archivedAt ? `${r.name} (archivée)` : r.name })),
+    },
+    {
+      type: 'multi',
+      key: 'templates',
+      label: 'Template',
+      variant: 'dropdown',
+      placeholder: 'Tous les templates',
+      options: templateOptions,
+    },
+    {
+      type: 'dateRange',
+      key: 'date',
+      label: "Période d'envoi",
+      presets: true,
+    },
+  ], [formations, rules, templateOptions]);
+
+  const t = useTableState({
+    filterDefs,
+    defaultSort: { field: 'date', direction: 'desc' },
+    pageSize: 50,
+  });
+
+  const filtered = useMemo(() => {
+    const status = (t.filters.status as string[]) ?? [];
+    const formationIds = (t.filters.formations as string[]) ?? [];
+    const ruleIds = (t.filters.rules as string[]) ?? [];
+    const templateNames = (t.filters.templates as string[]) ?? [];
+    const range = (t.filters.date as { from?: string; to?: string }) ?? {};
+    const fromTs = range.from ? new Date(range.from).getTime() : null;
+    const toTs = range.to ? new Date(range.to).getTime() + 86_400_000 - 1 : null;
+
+    return logs.filter((l) => {
+      if (!matchesSearch(t.search, [l.recipientName, l.recipientEmail])) return false;
+      if (status.length > 0 && !status.includes(l.status)) return false;
+      if (formationIds.length > 0 && !formationIds.includes(l.formationId)) return false;
+      if (ruleIds.length > 0 && !ruleIds.includes(l.ruleId)) return false;
+      if (templateNames.length > 0 && !templateNames.includes(l.templateName)) return false;
+      const sentTs = new Date(l.sentAt).getTime();
+      if (fromTs !== null && sentTs < fromTs) return false;
+      if (toTs !== null && sentTs > toTs) return false;
+      return true;
+    });
+  }, [logs, t.search, t.filters]);
+
+  const sorted = useMemo(() => sortItems(filtered, t.sort, LOG_SORT_ACCESSORS), [filtered, t.sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / t.pageSize));
+  const paginated = useMemo(
+    () => sorted.slice(t.page * t.pageSize, (t.page + 1) * t.pageSize),
+    [sorted, t.page, t.pageSize],
+  );
   useEffect(() => {
-    const qs = new URLSearchParams();
-    if (statusFilter) qs.set('status', statusFilter);
-    if (formationFilter) qs.set('formationId', formationFilter);
-    const q = qs.toString() ? `?${qs.toString()}` : '';
-    setLoading(true);
-    api.get<{ data: ReminderLog[] }>(`/admin/relances${q}`).then((r) => setLogs(r.data)).finally(() => setLoading(false));
-  }, [statusFilter, formationFilter]);
+    if (t.page > 0 && t.page >= totalPages) t.setPage(totalPages - 1);
+  }, [t.page, totalPages, t.setPage]);
 
   return (
     <div>
-      <div className="flex flex-wrap gap-3 mb-4 bg-white p-4 rounded-lg border border-gray-200">
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
-          Statut
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-sm text-gray-900 px-3 py-1.5 border border-gray-200 rounded-lg bg-white min-w-[160px]">
-            <option value="">Tous</option>
-            <option value="sent">Envoye</option>
-            <option value="failed">Echec</option>
-            <option value="skipped">Ignore</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
-          Formation
-          <select value={formationFilter} onChange={(e) => setFormationFilter(e.target.value)} className="text-sm text-gray-900 px-3 py-1.5 border border-gray-200 rounded-lg bg-white min-w-[220px]">
-            <option value="">Toutes</option>
-            {formations.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
-          </select>
-        </label>
+      <div className="mb-4 flex items-center gap-3 flex-wrap">
+        <SearchInput
+          value={t.searchInput}
+          onChange={t.setSearchInput}
+          placeholder="Rechercher par destinataire ou email..."
+        />
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={`inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors ${
+            t.activeFilterCount > 0 || filtersOpen
+              ? 'bg-brand-50 border-brand-300 text-brand-700'
+              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+          }`}
+          aria-expanded={filtersOpen}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18l-7 9v6l-4 2v-8L3 4z" />
+          </svg>
+          Filtres{t.activeFilterCount > 0 ? ` (${t.activeFilterCount})` : ''}
+        </button>
+        <span className="ml-auto text-sm text-gray-500">
+          {sorted.length} / {logs.length} relances
+        </span>
       </div>
 
+      {filtersOpen && (
+        <div className="mb-4">
+          <FilterPanel
+            open={filtersOpen}
+            filters={filterDefs}
+            values={t.filters}
+            onChange={t.setFilter}
+            onReset={t.resetFilters}
+            activeCount={t.activeFilterCount}
+          />
+        </div>
+      )}
+
       {loading ? <Loading /> : logs.length === 0 ? (
-        <Empty text="Aucune relance pour ces filtres" />
+        <Empty text="Aucune relance enregistrée" />
+      ) : sorted.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <p className="text-gray-500 mb-3">Aucune relance ne correspond</p>
+          <button
+            onClick={t.resetSearchAndFilters}
+            className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+          >
+            Effacer les filtres
+          </button>
+        </div>
       ) : (
         <>
           {/* ─── Vue cartes (mobile) ─────────────────────────────── */}
           <ul className="md:hidden space-y-3">
-            {logs.map((l) => (
+            {paginated.map((l) => (
               <li key={l.id} className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -917,7 +1108,7 @@ function LogsTab() {
                     <p className="text-xs text-gray-400 truncate">{l.recipientEmail}</p>
                   </div>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${statusStyles[l.status] || statusStyles.skipped}`}>
-                    {l.status === 'sent' ? 'Envoye' : l.status === 'failed' ? 'Echec' : 'Ignore'}
+                    {l.status === 'sent' ? 'Envoyé' : l.status === 'failed' ? 'Échec' : 'Ignoré'}
                   </span>
                 </div>
 
@@ -926,7 +1117,7 @@ function LogsTab() {
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 pt-1 border-t border-gray-100">
                   <span>{formatDate(l.sentAt)}</span>
                   <span>
-                    <span className="text-gray-400">Regle : </span>
+                    <span className="text-gray-400">Règle : </span>
                     {l.ruleName} <span className="text-gray-400">({l.ruleDelayDays}j)</span>
                   </span>
                   <span>
@@ -949,17 +1140,27 @@ function LogsTab() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">Destinataire</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">Formation</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">Regle</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                      <SortableHeader field="date" label="Date" currentSort={t.sort} onSortChange={t.cycleSort} />
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                      <SortableHeader field="recipient" label="Destinataire" currentSort={t.sort} onSortChange={t.cycleSort} />
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                      <SortableHeader field="formation" label="Formation" currentSort={t.sort} onSortChange={t.cycleSort} />
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                      <SortableHeader field="rule" label="Règle" currentSort={t.sort} onSortChange={t.cycleSort} />
+                    </th>
                     <th className="px-4 py-3 text-left font-medium text-gray-500">Template</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">Statut</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500">
+                      <SortableHeader field="status" label="Statut" currentSort={t.sort} onSortChange={t.cycleSort} />
+                    </th>
                     <th className="px-4 py-3 text-left font-medium text-gray-500 hidden xl:table-cell">Erreur</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {logs.map((l) => (
+                  {paginated.map((l) => (
                     <tr key={l.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(l.sentAt)}</td>
                       <td className="px-4 py-3">
@@ -971,7 +1172,7 @@ function LogsTab() {
                       <td className="px-4 py-3 text-xs text-gray-600">{l.templateName}{l.templateVersion && <span className="text-gray-400 ml-1">v{l.templateVersion}</span>}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[l.status] || statusStyles.skipped}`}>
-                          {l.status === 'sent' ? 'Envoye' : l.status === 'failed' ? 'Echec' : 'Ignore'}
+                          {l.status === 'sent' ? 'Envoyé' : l.status === 'failed' ? 'Échec' : 'Ignoré'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-red-500 hidden xl:table-cell">{l.errorMessage || '—'}</td>
@@ -981,6 +1182,10 @@ function LogsTab() {
               </table>
             </div>
           </div>
+
+          {sorted.length > t.pageSize && (
+            <Pagination page={t.page} totalPages={totalPages} onPageChange={t.setPage} />
+          )}
         </>
       )}
     </div>

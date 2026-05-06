@@ -49,6 +49,7 @@ export function FilterPanel({ open, filters, values, onChange, onReset, activeCo
               <DateRangeInput
                 value={(values[def.key] as { from?: string; to?: string }) ?? {}}
                 onChange={(v) => onChange(def.key, v)}
+                presets={def.presets ?? false}
               />
             )}
             {def.type === 'numericRange' && (
@@ -136,25 +137,65 @@ function MultiCheckboxes({
 function DateRangeInput({
   value,
   onChange,
+  presets,
 }: {
   value: { from?: string; to?: string };
   onChange: (v: { from?: string; to?: string }) => void;
+  presets: boolean;
 }) {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  const presetOptions = presets ? [
+    { label: "Aujourd'hui", compute: () => ({ from: todayStr, to: todayStr }) },
+    {
+      label: '7 derniers jours',
+      compute: () => ({ from: new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10), to: todayStr }),
+    },
+    {
+      label: '30 derniers jours',
+      compute: () => ({ from: new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10), to: todayStr }),
+    },
+    {
+      label: 'Ce mois-ci',
+      compute: () => {
+        const first = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+        return { from: first, to: todayStr };
+      },
+    },
+  ] : [];
+
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="date"
-        value={value.from ?? ''}
-        onChange={(e) => onChange({ ...value, from: e.target.value || undefined })}
-        className="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
-      />
-      <span className="text-gray-400 text-xs">→</span>
-      <input
-        type="date"
-        value={value.to ?? ''}
-        onChange={(e) => onChange({ ...value, to: e.target.value || undefined })}
-        className="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
-      />
+    <div className="space-y-2">
+      {presets && (
+        <div className="flex flex-wrap gap-1">
+          {presetOptions.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => onChange(p.compute())}
+              className="px-2 py-1 text-[11px] rounded-full border border-gray-200 bg-white text-gray-600 hover:border-gray-300 transition-colors"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          type="date"
+          value={value.from ?? ''}
+          onChange={(e) => onChange({ ...value, from: e.target.value || undefined })}
+          className="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <span className="text-gray-400 text-xs">→</span>
+        <input
+          type="date"
+          value={value.to ?? ''}
+          onChange={(e) => onChange({ ...value, to: e.target.value || undefined })}
+          className="flex-1 min-w-0 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+      </div>
     </div>
   );
 }
