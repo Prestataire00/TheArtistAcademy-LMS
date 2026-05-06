@@ -132,12 +132,31 @@ export async function handleSso(req: Request, res: Response) {
   // L'API et le Web sont sur des domaines distincts (Railway) : tous les
   // redirects qui pointent vers le Web doivent être ABSOLUS, sinon le
   // navigateur reste sur le domaine API.
+  //
+  // Quand return_to pointe vers notre Web, on append `token=<internalJwt>` :
+  // le middleware Next.js l'intercepte, le pose en cookie HttpOnly côté Web,
+  // puis redirige vers la même URL nettoyée. Sans ça, le frontend arrive sur
+  // /formations/[id] sans session (la page de relais /sso/dendreo n'est jamais
+  // chargée quand return_to est fourni par Dendreo).
   const explicitReturnTo = req.query.return_to as string | undefined;
   if (explicitReturnTo) {
     const absoluteReturnTo = /^https?:\/\//i.test(explicitReturnTo)
       ? explicitReturnTo
       : `${env.WEB_URL}${explicitReturnTo.startsWith('/') ? '' : '/'}${explicitReturnTo}`;
-    res.redirect(absoluteReturnTo);
+
+    let finalUrl = absoluteReturnTo;
+    try {
+      const target = new URL(absoluteReturnTo);
+      const webOrigin = new URL(env.WEB_URL);
+      if (target.host === webOrigin.host) {
+        target.searchParams.set('token', internalToken);
+        finalUrl = target.toString();
+      }
+    } catch {
+      // URL malformée : on laisse passer l'URL d'origine, le navigateur tranchera.
+    }
+
+    res.redirect(finalUrl);
     return;
   }
 
