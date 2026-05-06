@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { env } from '../../config/env';
 import { UnauthorizedError } from '../../shared/errors';
+import { logger } from '../../shared/logger';
 
 /**
  * Middleware de vérification HMAC-SHA256 pour les webhooks entrants Dendreo.
@@ -9,8 +10,11 @@ import { UnauthorizedError } from '../../shared/errors';
  */
 export function verifyDendreoWebhookSignature(req: Request, _res: Response, next: NextFunction) {
   const signature = req.headers['signature'] as string;
+  const tenantId = (req.body?.tenant_id as string) ?? 'unknown';
+  const event = (req.body?.event as string) ?? 'unknown';
 
   if (!signature) {
+    logger.warn('webhook.signature_missing', { tenantId, event });
     throw new UnauthorizedError('Signature webhook manquante');
   }
 
@@ -30,12 +34,14 @@ export function verifyDendreoWebhookSignature(req: Request, _res: Response, next
     .update(rawBody)
     .digest('hex');
 
-  const valid = crypto.timingSafeEqual(
-    Buffer.from(signature, 'hex'),
-    Buffer.from(expected, 'hex'),
-  );
-
-  if (!valid) {
+  // Guard de longueur : `Buffer.from(hex)` tronque silencieusement les
+  // caractères non-hex et `crypto.timingSafeEqual` lève une RangeError si les
+  // longueurs des buffers diffèrent. Sans ce guard, une signature malformée
+  // ou trop courte fait remonter une 500 INTERNAL_ERROR au lieu du 401 attendu.
+  const sigBuf = Buffer.from(signature, 'hex');
+  const expBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    logger.warn('webhook.signature_invalid', { tenantId, event });
     throw new UnauthorizedError('Signature webhook invalide');
   }
 
@@ -53,12 +59,13 @@ export function verifyDendreoApiKey(req: Request, _res: Response, next: NextFunc
     throw new UnauthorizedError('Clé API manquante');
   }
 
-  const valid = crypto.timingSafeEqual(
-    Buffer.from(apiKey),
-    Buffer.from(env.DENDREO_API_KEY),
-  );
-
-  if (!valid) {
+  // Même guard de longueur que pour les webhooks : si la clé reçue n'a pas
+  // la même longueur que la clé attendue, `timingSafeEqual` lèverait une
+  // RangeError → 500 au lieu de 401.
+  const apiKeyBuf = Buffer.from(apiKey);
+  const expectedBuf = Buffer.from(env.DENDREO_API_KEY);
+  if (apiKeyBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(apiKeyBuf, expectedBuf)) {
+    logger.warn('api_key.invalid', { path: req.path });
     throw new UnauthorizedError('Clé API invalide');
   }
 
