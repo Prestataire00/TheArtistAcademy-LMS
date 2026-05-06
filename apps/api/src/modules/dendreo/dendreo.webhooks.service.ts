@@ -60,11 +60,20 @@ export async function handleUserWebhook(payload: UserWebhookPayload) {
   // Hash le password si fourni (nouvelle spec)
   const passwordHash = d.password ? await bcrypt.hash(d.password, 12) : undefined;
 
+  // Pont d'identité Dendreo : on remplit aussi `dendreoUserId` (en plus du
+  // générique `externalId`) parce que c'est cette colonne que la
+  // résolution SSO interroge en fallback (cf. auth.service.findUserForSso)
+  // et c'est la clé sur laquelle le futur fix du matching user.created
+  // s'appuiera (cf. bug c — "matcher d'abord sur dendreo_user_id"). Tant
+  // que les deux colonnes coexistent, on les garde synchronisées.
+  const dendreoUserId = tmsOrigin === 'dendreo' ? externalId : null;
+
   const user = await prisma.user.upsert({
     where: { email: d.email },
     update: {
       fullName,
       externalId,
+      ...(dendreoUserId ? { dendreoUserId } : {}),
       tmsOrigin,
       isActive: true,
       ...(passwordHash ? { passwordHash } : {}),
@@ -73,6 +82,7 @@ export async function handleUserWebhook(payload: UserWebhookPayload) {
       email: d.email,
       fullName,
       externalId,
+      ...(dendreoUserId ? { dendreoUserId } : {}),
       tmsOrigin,
       role: 'learner',
       ...(passwordHash ? { passwordHash } : {}),
