@@ -1,7 +1,7 @@
 # Intégration Dendreo — Notes de tests
 
 > Document de référence pour l'intégration avec le Connecteur LMS Universel Dendreo.
-> Dernière mise à jour : 06/05/2026 — **intégration validée end-to-end sur sandbox**.
+> Dernière mise à jour : 06/05/2026 — **intégration validée end-to-end + Phase 1 hotfix sécurité shippée (bugs a, e, f)**.
 
 ---
 
@@ -174,12 +174,12 @@ Sans cette rewrite (par exemple si le frontend appelait directement l'URL Railwa
 
 | # | Sévérité | Bug | Notes |
 | --- | --- | --- | --- |
-| a | Sécurité | Endpoints webhooks renvoient `500` au lieu de `401` quand la signature HMAC est invalide | Sécurité par obscurité non respectée — fuite d'info sur l'existence du endpoint |
+| ~~a~~ | ~~Sécurité~~ | ~~Endpoints webhooks renvoient `500` au lieu de `401` quand la signature HMAC est invalide~~ | ✅ **FIXED** `544f1a4` — guard de longueur ajouté avant `timingSafeEqual` (HMAC + API key), warn log structuré sur rejet |
 | b | Race | Si `enrolment.created` arrive avant `session.created`, l'enrollment est créé sans `dendreo_session_id` | Observé sur l'enrolment EVA TEST `id 21519` — prévoir un backfill ou file d'attente |
-| **c** | **🚨 BLOQUEUR PROD** | **`user.created` fait un upsert sur l'`email`. Un admin Dendreo partageant son email avec un participant verrait son rôle écrasé en `learner`** | **À refondre IMPÉRATIVEMENT avant prod : matcher d'abord sur `dendreo_user_id`, ne jamais downgrade un rôle existant. N'importe quelle inscription Dendreo avec un email d'admin LMS = compromission du compte admin.** |
+| **c** | **🚨 BLOQUEUR PROD** | **`user.created` fait un upsert sur l'`email`. Un admin Dendreo partageant son email avec un participant verrait son rôle écrasé en `learner`** | **À refondre IMPÉRATIVEMENT avant prod : matcher d'abord sur `dendreo_user_id`, ne jamais downgrade un rôle existant. N'importe quelle inscription Dendreo avec un email d'admin LMS = compromission du compte admin.** ⚠️ **Pollution déjà constatée** : le compte admin `eva.randrianasolo@gmail.com` a reçu `externalId=2252` (participant Dendreo TEST EVA) lors de la validation sandbox. Prévoir un cleanup manuel pendant le fix Phase 2 pour décorréler le compte admin du participant Dendreo. |
 | d | Observabilité | Logging insuffisant des webhooks `user.created` et `enrolment.created` | Seul `session.created` produit un log structuré clair |
-| e | Données | `users.dendreo_user_id` reste NULL alors qu'elle devrait être renseignée | Fix dans le handler `user.created` |
-| f | Feature | Bouton "Retour à Dendreo" non implémenté dans l'UI LMS | Utiliser `dendreo_return_to` (cf. doc PDF Connecteur LMS Universel p.18) — cookie `dendreo_return_to` déjà posé par l'API SSO |
+| ~~e~~ | ~~Données~~ | ~~`users.dendreo_user_id` reste NULL alors qu'elle devrait être renseignée~~ | ✅ **FIXED** `c8e83fc` (option A — sync `dendreoUserId` ← `externalId` au webhook) + `8f104bd` (script de backfill `backfill-dendreo-user-id.ts` pour les rows existantes) |
+| ~~f~~ | ~~Feature~~ | ~~Bouton "Retour à Dendreo" non implémenté dans l'UI LMS~~ | ✅ **FIXED** — déjà implémenté dans [apps/web/src/app/formations/[id]/page.tsx](../apps/web/src/app/formations/[id]/page.tsx) (composant `DendreoReturnLink`, lit le cookie `dendreo_return_to` posé par l'API SSO, fallback `NEXT_PUBLIC_DENDREO_EXTRANET_URL`). Découvert pendant l'audit Phase 1. |
 
 ---
 
@@ -190,7 +190,7 @@ Sans cette rewrite (par exemple si le frontend appelait directement l'URL Railwa
 - [x] ~~Tester le flow complet : participant sandbox → ADF → SSO depuis l'extranet → page formation~~ ✅
 - [ ] **Traiter le bloqueur prod (§9 bug c) — impératif avant tout go-live**
 - [ ] Implémenter le pull `extranet_autologin_url` au moment des relances email *(infra existante, à brancher sur le scheduler)*
-- [ ] Traiter les autres bugs résiduels listés en §9 (a, b, d, e, f)
+- [ ] Traiter les bugs résiduels restants en §9 (b, d) — (a, e, f shippés en Phase 1)
 - [ ] **Tester l'intégration sur la prod Dendreo** (avec un Participant + Module + ADF clairement marqués TEST), avant la bascule réelle des apprenants existants
 - [ ] Documenter la procédure de bascule sandbox → prod le jour du go-live
 - [ ] Renommer `tenant_id` `taa-formation-test` → valeur prod
