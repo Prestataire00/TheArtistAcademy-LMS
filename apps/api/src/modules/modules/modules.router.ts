@@ -4,9 +4,9 @@ import { requireRole } from '../../middleware/requireRole';
 import * as ctrl from './modules.controller';
 
 export const adminModulesRouter = Router();
-// trainer dans la hierarchie permet admin+superadmin aussi
-// Les routes de creation/suppression sont protegees par le guard ownership pour les trainers
-adminModulesRouter.use(authenticate, requireRole('trainer'));
+// Routes de gestion de contenu : ouvertes à trainer + admin + superadmin.
+// L'ownership formation est ré-vérifiée par les guards en aval pour les trainers.
+adminModulesRouter.use(authenticate, requireRole('trainer', 'admin', 'superadmin'));
 
 // GET    /api/v1/admin/formations/:formationId/modules        — Liste modules d'une formation
 adminModulesRouter.get('/formations/:formationId/modules', ctrl.list);

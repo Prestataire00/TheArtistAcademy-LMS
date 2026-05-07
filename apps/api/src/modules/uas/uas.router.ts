@@ -5,7 +5,8 @@ import { asyncHandler } from '../../shared/errors';
 import * as ctrl from './uas.controller';
 
 export const adminUAsRouter = Router();
-adminUAsRouter.use(authenticate, requireRole('trainer'));
+// Routes de gestion de contenu : ouvertes à trainer + admin + superadmin.
+adminUAsRouter.use(authenticate, requireRole('trainer', 'admin', 'superadmin'));
 
 // GET    /api/v1/admin/modules/:moduleId/uas   — Liste UAs d'un module
 adminUAsRouter.get('/modules/:moduleId/uas', ctrl.list);

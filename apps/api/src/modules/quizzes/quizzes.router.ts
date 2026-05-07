@@ -7,10 +7,12 @@ import * as ctrl from './quizzes.controller';
 
 // ─── Admin/Formateur — Gestion quiz ──────────────────────────────────────────
 export const adminQuizzesRouter = Router();
-adminQuizzesRouter.use(authenticate, requireRole('trainer'));
+// Routes de gestion de contenu : ouvertes à trainer + admin + superadmin.
+// L'ownership formation est ré-vérifiée par verifyTrainerOwnership() en aval
+// pour les trainers (admins/superadmins passent sans restriction).
+adminQuizzesRouter.use(authenticate, requireRole('trainer', 'admin', 'superadmin'));
 
 // PUT /api/v1/admin/uas/:id/quiz — Créer ou remplacer le quiz d'une UA
-// Accessible admin (sans restriction) + trainer (uniquement ses formations)
 adminQuizzesRouter.put('/uas/:id/quiz', verifyTrainerOwnership(), asyncHandler(ctrl.adminUpsertQuiz));
 
 // ─── Player — Quiz apprenant ──────────────────────────────────────────────────

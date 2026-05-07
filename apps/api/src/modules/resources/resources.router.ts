@@ -33,10 +33,12 @@ function handleMulterError(err: Error, _req: Request, _res: Response, next: Next
 
 // ─── Admin/Formateur — Upload/Delete ressource ──────────────────────────────
 export const adminResourcesRouter = Router();
-adminResourcesRouter.use(authenticate, requireRole('trainer'));
+// Routes de gestion de contenu : ouvertes à trainer + admin + superadmin.
+// L'ownership formation est ré-vérifiée par verifyTrainerOwnership() en aval
+// pour les trainers (admins/superadmins passent sans restriction).
+adminResourcesRouter.use(authenticate, requireRole('trainer', 'admin', 'superadmin'));
 
 // POST   /api/v1/admin/uas/:id/resource
-// Accessible admin (sans restriction) + trainer (uniquement ses formations)
 adminResourcesRouter.post('/uas/:id/resource', upload.single('file'), handleMulterError, verifyTrainerOwnership(), asyncHandler(ctrl.adminUpload));
 
 // DELETE /api/v1/admin/uas/:id/resource
