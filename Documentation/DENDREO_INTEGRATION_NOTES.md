@@ -1,7 +1,7 @@
 # Intégration Dendreo — Notes de tests
 
 > Document de référence pour l'intégration avec le Connecteur LMS Universel Dendreo.
-> Dernière mise à jour : 06/05/2026 — **intégration validée end-to-end + Phase 1 hotfix sécurité shippée (bugs a, e, f)**.
+> Dernière mise à jour : 07/05/2026 — **Phase 2A revertée (multi-rôles abandonné), retour au mono-rôle + assignation formation (Phase 2A bis)**.
 
 ---
 
@@ -170,13 +170,70 @@ Sans cette rewrite (par exemple si le frontend appelait directement l'URL Railwa
 
 ---
 
+## Phase 2A — Refonte multi-rôles (⛔ DÉPRÉCIÉE — REVERTÉE LE 07/05/2026)
+
+> ⛔ **DÉPRÉCIÉ** — section conservée à titre de **traçabilité historique**.
+> Le tag `v0.2-phase2a-final` marque l'état du repo à la fin de cette phase, juste avant le revert.
+> Le modèle finalement retenu est documenté dans **Phase 2A bis** ci-dessous.
+
+### Contexte initial
+
+Besoin remonté pendant la Phase 1 : permettre à un user (typiquement un admin) de cumuler plusieurs rôles simultanément (ex : admin + trainer + learner pour des tests internes).
+
+### Travail réalisé (4 commits sur `main`)
+
+| Commit | Sujet |
+| --- | --- |
+| `c918a70` | feat(auth): support multi-roles per user (UserRole[]) |
+| `3d75e3c` | fix(admin): allow admin/superadmin on admin sub-routers after multi-roles refactor |
+| `3bdfb94` | fix(admin): allow superadmin on admin-only routers (admin, users, exports, reminders, formations) |
+| `cd30414` | fix(admin): multi-roles UI for users (table badges + form multi-select) |
+
+Schéma : `User.role: UserRole` → `User.roles: UserRole[]` (Postgres array natif), backfill non-destructif via migration `20260506120000_user_roles_multi`. Hiérarchie linéaire supprimée — chaque check de rôle liste explicitement les rôles autorisés. Payload JWT passe de `{ role }` à `{ roles }`. UI admin/utilisateurs migrée vers un multi-select à tags (composant `RoleTagSelect`).
+
+### Pourquoi le revert
+
+Après mise en place, on a constaté que le multi-rôles ne reflète pas le besoin réel d'Artist Academy :
+
+- Un admin n'a jamais besoin d'être *à la fois* admin et trainer staff. C'est **l'assignation à une formation** qui doit ouvrir l'espace formateur, pas un rôle global.
+- Le besoin "tester en apprenant" se résout via le SSO Dendreo (extranet) côté apprenant, sans toucher au modèle staff.
+- Le multi-rôles introduit de la complexité côté code (élargissement explicite des guards `requireRole`) et côté UI (multi-select à tags) sans bénéfice métier clair.
+
+Le bon modèle est documenté dans **Phase 2A bis** ci-dessous.
+
+---
+
+## Phase 2A bis — Modèle final mono-rôle + assignation formation
+
+> 📌 **Décidé le 07/05/2026** — annule et remplace Phase 2A.
+
+### Modèle
+
+1. **Mono-rôle** — `User.role: UserRole` (admin OU trainer OU learner, exclusif). Retour au schéma pré-Phase 2A.
+2. **L'accès à `/formateur/*` ne dépend PAS du rôle** — il dépend d'une **assignation** user ↔ formation : champ `Formation.trainerId` (1 seul formateur principal par formation, déjà présent en DB depuis la migration `20260411071403_add_trainer_to_formation`).
+3. Un **admin assigné comme formateur** d'une formation accède à `/formateur/*` pour cette formation, **tout en gardant** ses droits admin sur `/admin/*`.
+4. Le besoin "apprenant test" passe par le SSO Dendreo (extranet), comme n'importe quel apprenant. Aucun changement côté modèle staff : pas de rôle `'learner'` explicite à poser sur un compte staff, l'apprenant est juste inscrit via Dendreo.
+5. **Post-login pour un admin** :
+   - Si assigné à ≥ 1 formation : écran de switch « Espace Admin / Mes formations »
+   - Sinon : redirection directe vers `/admin`
+
+### Chantiers d'implémentation à venir
+
+| # | Chantier | Description |
+| --- | --- | --- |
+| a | **Revert technique du multi-rôles** | Restauration de `User.role: UserRole`, suppression de `User.roles[]`, rollback du payload JWT (`{ role }`), retrait du multi-select UI (`RoleTagSelect` + `EditRolesSlideOver`), restauration du dropdown mono-rôle. Migration non-destructive en miroir : ADD COLUMN `role` → backfill `role = roles[0]` → DROP COLUMN `roles`. Rotation `JWT_SECRET` post-deploy pour invalider les sessions multi-rôles encore actives. |
+| b | **Champ Formateur sur la formation** | `Formation.trainerId` existe déjà ; vérifier que l'UI admin de gestion des formations expose un sélecteur formateur clair (peuplé via `GET /admin/trainers`, qui filtre sur `roles.has('trainer')` aujourd'hui — à adapter au mono-rôle après revert). Documenter la sémantique « 1 formateur principal par formation ». |
+| c | **Logique d'accès `/formateur/*` + écran post-login switch** | Le guard `requireRole('trainer')` sur `formateurRouter` doit être remplacé par un check « le user a au moins une formation assignée » (lookup `Formation.trainerId === user.userId`). Écran post-login pour les admins assignés (switch Admin / Mes formations) ; les admins non-assignés vont directement à `/admin`. |
+
+---
+
 ## 9. Bugs résiduels à traiter avant la prod
 
 | # | Sévérité | Bug | Notes |
 | --- | --- | --- | --- |
 | ~~a~~ | ~~Sécurité~~ | ~~Endpoints webhooks renvoient `500` au lieu de `401` quand la signature HMAC est invalide~~ | ✅ **FIXED** `544f1a4` — guard de longueur ajouté avant `timingSafeEqual` (HMAC + API key), warn log structuré sur rejet |
 | b | Race | Si `enrolment.created` arrive avant `session.created`, l'enrollment est créé sans `dendreo_session_id` | Observé sur l'enrolment EVA TEST `id 21519` — prévoir un backfill ou file d'attente |
-| **c** | **🚨 BLOQUEUR PROD** | **`user.created` fait un upsert sur l'`email`. Un admin Dendreo partageant son email avec un participant verrait son rôle écrasé en `learner`** | **À refondre IMPÉRATIVEMENT avant prod : matcher d'abord sur `dendreo_user_id`, ne jamais downgrade un rôle existant. N'importe quelle inscription Dendreo avec un email d'admin LMS = compromission du compte admin.** ⚠️ **Pollution déjà constatée** : le compte admin `eva.randrianasolo@gmail.com` a reçu `externalId=2252` (participant Dendreo TEST EVA) lors de la validation sandbox. Prévoir un cleanup manuel pendant le fix Phase 2 pour décorréler le compte admin du participant Dendreo. |
+| **c** | **🚨 BLOQUEUR PROD — EN ATTENTE du revert Phase 2A** | **`user.created` fait un upsert sur l'`email`. Un admin Dendreo partageant son email avec un participant verrait son rôle écrasé en `learner`** | **À refondre IMPÉRATIVEMENT avant prod : matcher d'abord sur `dendreo_user_id`, ne jamais downgrade un rôle existant. N'importe quelle inscription Dendreo avec un email d'admin LMS = compromission du compte admin.** ⚠️ **Pollution déjà constatée** : le compte admin `eva.randrianasolo@gmail.com` a reçu `externalId=2252` (participant Dendreo TEST EVA) lors de la validation sandbox. ⏸️ **EN ATTENTE du revert Phase 2A** — la stratégie de matching/upsert évoluera avec le retour au mono-rôle (cf. *Phase 2A bis* ci-dessus). Le fix sera défini une fois `User.role` restauré. Cleanup manuel à prévoir pendant ce chantier pour décorréler le compte admin du participant Dendreo. |
 | d | Observabilité | Logging insuffisant des webhooks `user.created` et `enrolment.created` | Seul `session.created` produit un log structuré clair |
 | ~~e~~ | ~~Données~~ | ~~`users.dendreo_user_id` reste NULL alors qu'elle devrait être renseignée~~ | ✅ **FIXED** `c8e83fc` (option A — sync `dendreoUserId` ← `externalId` au webhook) + `8f104bd` (script de backfill `backfill-dendreo-user-id.ts` pour les rows existantes) |
 | ~~f~~ | ~~Feature~~ | ~~Bouton "Retour à Dendreo" non implémenté dans l'UI LMS~~ | ✅ **FIXED** — déjà implémenté dans [apps/web/src/app/formations/[id]/page.tsx](../apps/web/src/app/formations/[id]/page.tsx) (composant `DendreoReturnLink`, lit le cookie `dendreo_return_to` posé par l'API SSO, fallback `NEXT_PUBLIC_DENDREO_EXTRANET_URL`). Découvert pendant l'audit Phase 1. |
@@ -185,10 +242,11 @@ Sans cette rewrite (par exemple si le frontend appelait directement l'URL Railwa
 
 ## 10. Actions ouvertes
 
+- [ ] **REVERT PHASE 2A** : retour au mono-rôle (`User.role: UserRole`) + implémentation du champ Formateur sur formation (`Formation.trainerId`, déjà en DB) + écran post-login switch « Espace Admin / Mes formations » pour les admins assignés à au moins une formation. Cf. *Phase 2A bis* ci-dessus pour les 3 chantiers détaillés.
 - [x] ~~Marina : activer le Connecteur LMS Universel sur la sandbox~~ ✅ 06/05/2026
 - [x] ~~Configurer le formulaire connecteur avec les valeurs de §7~~ ✅
 - [x] ~~Tester le flow complet : participant sandbox → ADF → SSO depuis l'extranet → page formation~~ ✅
-- [ ] **Traiter le bloqueur prod (§9 bug c) — impératif avant tout go-live**
+- [ ] **Traiter le bloqueur prod (§9 bug c) — impératif avant tout go-live** *(en attente du revert Phase 2A)*
 - [ ] Implémenter le pull `extranet_autologin_url` au moment des relances email *(infra existante, à brancher sur le scheduler)*
 - [ ] Traiter les bugs résiduels restants en §9 (b, d) — (a, e, f shippés en Phase 1)
 - [ ] **Tester l'intégration sur la prod Dendreo** (avec un Participant + Module + ADF clairement marqués TEST), avant la bascule réelle des apprenants existants
