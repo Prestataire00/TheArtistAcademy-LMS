@@ -44,15 +44,11 @@ export default function LoginPage() {
         try { window.localStorage.setItem('token', data.token); } catch {}
       }
 
-      // Redirection selon les rôles. Priorité admin/superadmin > trainer >
-      // learner : un user staff cumulant plusieurs rôles atterrit d'abord
-      // sur la console la plus permissive (l'admin couvre la gestion ; un
-      // formateur-admin doit voir l'admin par défaut). Il pourra naviguer
-      // vers les autres espaces ensuite.
-      const roles: string[] = data.user?.roles ?? [];
-      if (roles.some((r) => r === 'admin' || r === 'superadmin')) {
+      // Redirection selon le rôle (mono-rôle).
+      const role: string | undefined = data.user?.role;
+      if (role === 'admin' || role === 'superadmin') {
         router.push('/admin');
-      } else if (roles.includes('trainer')) {
+      } else if (role === 'trainer') {
         router.push('/formateur/sessions');
       } else {
         router.push('/');

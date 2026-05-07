@@ -1,14 +1,14 @@
-// Tests pour le middleware requireRole — phase 2A multi-rôles.
-// requireRole(...required) doit autoriser dès que user.roles a UNE
-// intersection avec required. Plus de hiérarchie linéaire : un superadmin
-// n'hérite plus automatiquement des autres rôles.
+// Tests pour le middleware requireRole — modèle mono-rôle.
+// requireRole(...required) autorise dès que user.role figure dans la liste
+// des rôles requis. Pas de hiérarchie : chaque route liste explicitement
+// les rôles autorisés.
 
 import { UserRole } from '@prisma/client';
 import { requireRole } from '../src/middleware/requireRole';
 import { ForbiddenError } from '../src/shared/errors';
 
-function makeReq(roles: UserRole[]): any {
-  return { user: { userId: 'u1', email: 'u@example.com', roles } };
+function makeReq(role: UserRole): any {
+  return { user: { userId: 'u1', email: 'u@example.com', role } };
 }
 
 function expectForbidden(fn: () => void) {
@@ -20,43 +20,32 @@ function expectForbidden(fn: () => void) {
   }
 }
 
-describe('requireRole — multi-rôles (phase 2A)', () => {
-  it('autorise un user avec roles=[admin, learner] sur requireRole("admin")', () => {
-    // Cas a) bis : un user multi-rôles passe les checks de chaque rôle qu'il détient.
-    const req = makeReq(['admin', 'learner']);
+describe('requireRole — mono-rôle', () => {
+  it('autorise un user role=admin sur requireRole("admin")', () => {
+    const req = makeReq('admin');
     const next = jest.fn();
     requireRole('admin')(req, {} as any, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('autorise le même user avec roles=[admin, learner] sur requireRole("learner")', () => {
-    // Cas a) : un user admin+learner peut accéder à /admin ET aux pages apprenant.
-    const req = makeReq(['admin', 'learner']);
-    const next = jest.fn();
-    requireRole('learner')(req, {} as any, next);
-    expect(next).toHaveBeenCalledTimes(1);
-  });
-
-  it('refuse (403) un user avec roles=[trainer, learner] sur requireRole("admin")', () => {
-    // Cas b) : sans le rôle requis, refus net (plus de hiérarchie qui aurait
-    // promu trainer en admin).
-    const req = makeReq(['trainer', 'learner']);
+  it('refuse (403) un user role=trainer sur requireRole("admin")', () => {
+    // Pas de hiérarchie : trainer ne devient pas admin implicitement.
+    const req = makeReq('trainer');
     expectForbidden(() => requireRole('admin')(req, {} as any, jest.fn()));
   });
 
-  it('autorise un user avec roles=[trainer] sur requireRole("admin", "trainer")', () => {
-    // Cas c) : OR sur la liste des rôles requis — le user a "trainer", autorisé.
-    const req = makeReq(['trainer']);
+  it('autorise un user role=trainer sur requireRole("admin", "trainer")', () => {
+    // OR sur la liste des rôles requis — le user a "trainer", autorisé.
+    const req = makeReq('trainer');
     const next = jest.fn();
     requireRole('admin', 'trainer')(req, {} as any, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
 
   it("ne fait PAS de hiérarchie automatique — superadmin ne couvre pas 'learner'", () => {
-    // Confirmation explicite de la décision design : un superadmin n'a PAS
-    // automatiquement les autres rôles. Si on veut qu'il accède à du contenu
-    // learner, il faut lui ajouter explicitement 'learner' dans roles.
-    const req = makeReq(['superadmin']);
+    // Confirmation explicite : un superadmin n'a PAS automatiquement les
+    // autres rôles. Pour l'autoriser, il faut le lister dans requireRole.
+    const req = makeReq('superadmin');
     expectForbidden(() => requireRole('learner')(req, {} as any, jest.fn()));
   });
 

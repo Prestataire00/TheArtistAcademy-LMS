@@ -32,9 +32,8 @@ export async function handleLogin(req: Request, res: Response) {
   }
 
   // L'endpoint password login est réservé au staff (admin/trainer/superadmin).
-  // Un compte qui n'a QUE 'learner' doit passer par le SSO Dendreo.
-  const isStaff = user.roles.some((r) => r === 'admin' || r === 'trainer' || r === 'superadmin');
-  if (!isStaff) {
+  // Un learner doit passer par le SSO Dendreo.
+  if (user.role !== 'admin' && user.role !== 'trainer' && user.role !== 'superadmin') {
     throw new ForbiddenError('Les apprenants doivent se connecter via Dendreo');
   }
 
@@ -72,7 +71,7 @@ export async function handleLogin(req: Request, res: Response) {
   });
 
   res.json({
-    user: { id: user.id, email: user.email, roles: user.roles, fullName: user.fullName },
+    user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName },
     token,
   });
 }

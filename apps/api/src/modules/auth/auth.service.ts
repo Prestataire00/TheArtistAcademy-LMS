@@ -205,7 +205,7 @@ export async function findEnrollmentForSso(
 export function generateInternalJwt(user: User): string {
   const payload: AuthPayload = {
     userId: user.id,
-    roles: user.roles,
+    role: user.role,
     email: user.email,
   };
 

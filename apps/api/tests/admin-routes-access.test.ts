@@ -1,9 +1,9 @@
-// Régression post-phase-2A : avec la suppression de la hiérarchie linéaire,
-// un user roles=['admin'] qui hit GET /admin/dashboard/stats recevait 403
-// parce que `adminModulesRouter` (mounté sur `/admin` AVANT `adminRouter`,
-// gardé par requireRole('trainer')) intercepte la requête. Son middleware
-// router-level fire avant le matching de routes interne, donc même si la
-// route /dashboard/stats n'existe pas dans adminModulesRouter, le 403 sort.
+// Régression : sans hiérarchie linéaire, un user role='admin' qui hit
+// GET /admin/dashboard/stats recevait 403 parce que `adminModulesRouter`
+// (mounté sur `/admin` AVANT `adminRouter`, gardé par requireRole('trainer'))
+// intercepte la requête. Son middleware router-level fire avant le matching
+// de routes interne, donc même si la route /dashboard/stats n'existe pas
+// dans adminModulesRouter, le 403 sort.
 //
 // On teste à travers la stack Express complète (mount path + router order)
 // pour reproduire l'interaction qui causait le bug.
@@ -102,70 +102,70 @@ function buildApp() {
   return app;
 }
 
-function tokenFor(roles: string[]) {
+function tokenFor(role: string) {
   return jwt.sign(
-    { userId: 'u1', email: 'u@example.com', roles },
+    { userId: 'u1', email: 'u@example.com', role },
     TEST_JWT_SECRET,
     { expiresIn: '1h' },
   );
 }
 
-describe('Régression admin routes — multi-rôles + mounting', () => {
+describe('Régression admin routes — mono-rôle + mounting', () => {
   const app = buildApp();
 
-  it("user roles=['admin'] : GET /admin/dashboard/stats renvoie 200 (pas 403)", async () => {
+  it("user role='admin' : GET /admin/dashboard/stats renvoie 200 (pas 403)", async () => {
     // Cas qui déclenchait le bug en prod : adminModulesRouter (gardé sur
     // 'trainer') interceptait avant que adminRouter (gardé sur 'admin') ne
     // voie la requête. Avec le fix, les guards content-management acceptent
     // explicitement admin/superadmin et la requête traverse jusqu'à la cible.
     const res = await request(app)
       .get('/api/v1/admin/dashboard/stats')
-      .set('Authorization', `Bearer ${tokenFor(['admin'])}`);
+      .set('Authorization', `Bearer ${tokenFor('admin')}`);
     expect(res.status).toBe(200);
   });
 
-  it("user roles=['admin'] : GET /admin/trainers renvoie 200 (pas 403)", async () => {
+  it("user role='admin' : GET /admin/trainers renvoie 200 (pas 403)", async () => {
     const res = await request(app)
       .get('/api/v1/admin/trainers')
-      .set('Authorization', `Bearer ${tokenFor(['admin'])}`);
+      .set('Authorization', `Bearer ${tokenFor('admin')}`);
     expect(res.status).toBe(200);
   });
 
-  it("user roles=['superadmin'] : GET /admin/dashboard/stats renvoie 200", async () => {
+  it("user role='superadmin' : GET /admin/dashboard/stats renvoie 200", async () => {
     // Sans hiérarchie automatique, les routers admin-only doivent lister
     // explicitement 'superadmin' à côté de 'admin'. Test garde-fou : un
     // superadmin doit traverser adminRouter (élargi à admin+superadmin).
     const res = await request(app)
       .get('/api/v1/admin/dashboard/stats')
-      .set('Authorization', `Bearer ${tokenFor(['superadmin'])}`);
+      .set('Authorization', `Bearer ${tokenFor('superadmin')}`);
     expect(res.status).toBe(200);
   });
 
-  it("user roles=['superadmin'] : GET /admin/utilisateurs renvoie 200", async () => {
+  it("user role='superadmin' : GET /admin/utilisateurs renvoie 200", async () => {
     // adminUsersRouter est aussi élargi à admin+superadmin.
     const res = await request(app)
       .get('/api/v1/admin/utilisateurs')
-      .set('Authorization', `Bearer ${tokenFor(['superadmin'])}`);
+      .set('Authorization', `Bearer ${tokenFor('superadmin')}`);
     expect(res.status).toBe(200);
   });
 
-  it("user roles=['trainer'] uniquement : 403 sur /admin/dashboard/stats", async () => {
-    // Garde-fou anti-élargissement : un trainer non-admin ne doit PAS
-    // pouvoir lire le dashboard admin. Le fait qu'on ait élargi les
-    // guards content-management ne doit pas ouvrir adminRouter.
+  it("user role='trainer' : 403 sur /admin/dashboard/stats", async () => {
+    // Garde-fou anti-élargissement : un trainer ne doit PAS pouvoir lire
+    // le dashboard admin. Le fait qu'on ait élargi les guards
+    // content-management ne doit pas ouvrir adminRouter.
     const res = await request(app)
       .get('/api/v1/admin/dashboard/stats')
-      .set('Authorization', `Bearer ${tokenFor(['trainer'])}`);
+      .set('Authorization', `Bearer ${tokenFor('trainer')}`);
     expect(res.status).toBe(403);
   });
 
-  it("user roles=['trainer'] : GET /admin/modules/abc traverse adminModulesRouter (pas 403)", async () => {
+  it("user role='trainer' : GET /admin/modules/abc traverse adminModulesRouter (pas 403)", async () => {
     // Le trainer reste autorisé sur les routers content-management après
     // l'élargissement (garde-fou anti-élargissement-excessif côté inverse :
     // on a ajouté admin/superadmin SANS retirer trainer).
     const res = await request(app)
       .get('/api/v1/admin/modules/abc')
-      .set('Authorization', `Bearer ${tokenFor(['trainer'])}`);
+      .set('Authorization', `Bearer ${tokenFor('trainer')}`);
     expect(res.status).toBe(200);
   });
 

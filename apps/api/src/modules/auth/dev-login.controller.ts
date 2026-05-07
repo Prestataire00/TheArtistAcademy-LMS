@@ -10,11 +10,9 @@ const roleEnum = z.enum(['learner', 'trainer', 'admin', 'superadmin']);
 
 const devLoginSchema = z.object({
   email: z.string().email(),
-  roles: z.array(roleEnum).nonempty(),
+  role: roleEnum,
   fullName: z.string().optional(),
 });
-
-const DEPRECATED_ROLE_MESSAGE = "Field 'role' is deprecated. Use 'roles' (array) instead.";
 
 /**
  * POST /api/v1/auth/dev-login
@@ -26,27 +24,21 @@ export async function handleDevLogin(req: Request, res: Response) {
     throw new ForbiddenError('Route disponible uniquement en développement');
   }
 
-  // Refus explicite de l'ancien format `role` (string). Décision phase 2A :
-  // un seul format canonique côté API, pas de double-acceptance.
-  if (req.body && typeof req.body === 'object' && 'role' in req.body) {
-    throw new BadRequestError(DEPRECATED_ROLE_MESSAGE);
-  }
-
   const parsed = devLoginSchema.safeParse(req.body);
   if (!parsed.success) {
     throw new BadRequestError(parsed.error.errors.map(e => e.message).join(', '));
   }
 
-  const { email, roles, fullName } = parsed.data;
-  const finalRoles: UserRole[] = roles as UserRole[];
+  const { email, role, fullName } = parsed.data;
+  const finalRole: UserRole = role as UserRole;
 
   const user = await prisma.user.upsert({
     where: { email },
-    update: { roles: finalRoles, lastSeenAt: new Date() },
+    update: { role: finalRole, lastSeenAt: new Date() },
     create: {
       email,
       fullName: fullName || email.split('@')[0],
-      roles: finalRoles,
+      role: finalRole,
       lastSeenAt: new Date(),
     },
   });
@@ -61,7 +53,7 @@ export async function handleDevLogin(req: Request, res: Response) {
   });
 
   res.json({
-    user: { id: user.id, email: user.email, roles: user.roles, fullName: user.fullName },
+    user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName },
     token,
   });
 }

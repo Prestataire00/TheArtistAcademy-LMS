@@ -9,23 +9,14 @@ import { SearchInput } from '@/components/SearchInput';
 import { SortableHeader } from '@/components/SortableHeader';
 import { FilterPanel } from '@/components/FilterPanel';
 import { Pagination } from '@/components/Pagination';
-import { RoleTagSelect } from '@/components/admin/RoleTagSelect';
 import { matchesSearch } from '@/lib/search';
 import { useTableState, sortItems, type FilterDef } from '@/lib/useTableState';
-
-// Rôles staff que l'admin peut assigner via cette page (cohérent avec le
-// staffRoleEnum côté API : seuls 'admin' et 'trainer' sont éditables ici ;
-// 'learner' est créé par webhook Dendreo, 'superadmin' par script DB).
-const STAFF_ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'trainer', label: 'Formateur' },
-];
 
 interface StaffUser {
   id: string;
   email: string;
   fullName: string;
-  roles: string[];
+  role: string;
   isActive: boolean;
   createdAt: string;
   lastSeenAt: string | null;
@@ -62,7 +53,7 @@ const FILTER_DEFS: FilterDef[] = [
 const SORT_ACCESSORS: Record<string, (u: StaffUser) => unknown> = {
   fullName: (u) => u.fullName,
   email: (u) => u.email,
-  role: (u) => u.roles.slice().sort().join(','),
+  role: (u) => u.role,
   createdAt: (u) => new Date(u.createdAt).getTime(),
   lastSeenAt: (u) => (u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : null),
 };
@@ -71,7 +62,6 @@ export default function AdminUtilisateursPage() {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingRolesUser, setEditingRolesUser] = useState<StaffUser | null>(null);
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string } | null>(null);
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState('');
@@ -88,7 +78,7 @@ export default function AdminUtilisateursPage() {
 
     return users.filter((u) => {
       if (!matchesSearch(t.search, [u.fullName, u.email])) return false;
-      if (roleFilter.length > 0 && !u.roles.some((r) => roleFilter.includes(r))) return false;
+      if (roleFilter.length > 0 && !roleFilter.includes(u.role)) return false;
       const created = new Date(u.createdAt).getTime();
       if (fromTs !== null && created < fromTs) return false;
       if (toTs !== null && created > toTs) return false;
@@ -132,18 +122,12 @@ export default function AdminUtilisateursPage() {
     setEditingName(null);
   }
 
-  async function handleRolesSave(user: StaffUser, nextRoles: string[]) {
-    // L'API zod schema (staffRoleEnum) accepte uniquement admin/trainer ici ;
-    // les autres rôles (learner, superadmin) sont gérés ailleurs et préservés
-    // côté serveur s'ils existent (le PUT remplace `roles` par ce qu'on envoie,
-    // donc on garde explicitement tout rôle non-staff que le user avait).
-    const preserved = user.roles.filter((r) => r !== 'admin' && r !== 'trainer');
-    const merged = [...nextRoles, ...preserved];
+  async function handleRoleChange(user: StaffUser, nextRole: string) {
+    if (nextRole === user.role) return;
     try {
-      await api.put(`/admin/utilisateurs/${user.id}`, { roles: merged });
-      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, roles: merged } : u));
-      showToast(`Rôles de ${user.fullName} mis à jour`, 'success');
-      setEditingRolesUser(null);
+      await api.put(`/admin/utilisateurs/${user.id}`, { role: nextRole });
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, role: nextRole } : u));
+      showToast(`Rôle de ${user.fullName} mis à jour`, 'success');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Erreur', 'error');
     }
@@ -207,15 +191,6 @@ export default function AdminUtilisateursPage() {
         <CreateUserSlideOver
           onSave={() => { setShowCreate(false); loadData(); showToast('Utilisateur créé', 'success'); }}
           onClose={() => setShowCreate(false)}
-          onError={(msg) => showToast(msg, 'error')}
-        />
-      )}
-
-      {editingRolesUser && (
-        <EditRolesSlideOver
-          user={editingRolesUser}
-          onSave={(nextRoles) => handleRolesSave(editingRolesUser, nextRoles)}
-          onClose={() => setEditingRolesUser(null)}
           onError={(msg) => showToast(msg, 'error')}
         />
       )}
@@ -296,17 +271,12 @@ export default function AdminUtilisateursPage() {
           )}
           subtitleKey={(u) => <span className="truncate block">{u.email}</span>}
           badgeKey={(u) => (
-            <span className="flex flex-wrap gap-1">
-              {u.roles.map((r) => (
-                <span
-                  key={r}
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
-                    ROLE_BADGE_CLASSES[r] ?? 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {ROLE_LABELS[r] ?? r}
-                </span>
-              ))}
+            <span
+              className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
+                ROLE_BADGE_CLASSES[u.role] ?? 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {ROLE_LABELS[u.role] ?? u.role}
             </span>
           )}
           columns={[
@@ -345,28 +315,15 @@ export default function AdminUtilisateursPage() {
               mobileLabel: 'Rôle',
               label: <SortableHeader field="role" label="Rôle" currentSort={t.sort} onSortChange={t.cycleSort} />,
               render: (u) => (
-                <div className="flex items-center gap-2 flex-wrap">
-                  {u.roles.length === 0 ? (
-                    <span className="text-xs text-gray-400">—</span>
-                  ) : (
-                    u.roles.map((r) => (
-                      <span
-                        key={r}
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
-                          ROLE_BADGE_CLASSES[r] ?? 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {ROLE_LABELS[r] ?? r}
-                      </span>
-                    ))
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setEditingRolesUser(u)}
-                    aria-label={`Modifier les rôles de ${u.fullName}`}
-                    className="text-xs text-gray-500 hover:text-brand-600 underline-offset-2 hover:underline"
-                  >Modifier</button>
-                </div>
+                <select
+                  value={u.role}
+                  onChange={(e) => handleRoleChange(u, e.target.value)}
+                  aria-label={`Rôle de ${u.fullName}`}
+                  className="text-xs border border-gray-200 rounded px-2 py-1 bg-white hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="trainer">Formateur</option>
+                </select>
               ),
             },
             {
@@ -415,7 +372,7 @@ function CreateUserSlideOver({ onSave, onClose, onError }: {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [roles, setRoles] = useState<string[]>(['trainer']);
+  const [role, setRole] = useState<'admin' | 'trainer'>('trainer');
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit() {
@@ -427,13 +384,9 @@ function CreateUserSlideOver({ onSave, onClose, onError }: {
       onError('Le mot de passe doit contenir au moins 8 caracteres');
       return;
     }
-    if (roles.length === 0) {
-      onError('Au moins un rôle est requis');
-      return;
-    }
     setSaving(true);
     try {
-      await api.post('/admin/utilisateurs', { fullName, email, password, roles });
+      await api.post('/admin/utilisateurs', { fullName, email, password, role });
       onSave();
     } catch (err: unknown) {
       onError(err instanceof Error ? err.message : 'Erreur');
@@ -446,7 +399,7 @@ function CreateUserSlideOver({ onSave, onClose, onError }: {
       footer={
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button>
-          <button onClick={handleSubmit} disabled={saving || roles.length === 0} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
+          <button onClick={handleSubmit} disabled={saving} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
             {saving ? 'Creation...' : 'Creer'}
           </button>
         </div>
@@ -466,80 +419,16 @@ function CreateUserSlideOver({ onSave, onClose, onError }: {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="8 caracteres minimum" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Rôles *</label>
-          <RoleTagSelect
-            options={STAFF_ROLE_OPTIONS}
-            value={roles}
-            onChange={setRoles}
-            placeholder="Choisir un ou plusieurs rôles..."
-            ariaLabel="Rôles à assigner"
-          />
-          {roles.length === 0 && (
-            <p className="mt-1 text-xs text-red-600">Au moins un rôle est requis.</p>
-          )}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Rôle *</label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as 'admin' | 'trainer')}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          >
+            <option value="admin">Admin</option>
+            <option value="trainer">Formateur</option>
+          </select>
         </div>
-      </div>
-    </Modal>
-  );
-}
-
-// ─── Slide-over edition rôles ───────────────────────────────────────────────
-
-function EditRolesSlideOver({ user, onSave, onClose, onError }: {
-  user: StaffUser;
-  onSave: (nextRoles: string[]) => Promise<void> | void;
-  onClose: () => void;
-  onError: (msg: string) => void;
-}) {
-  // Pré-rempli avec les rôles staff actuels uniquement (admin/trainer).
-  // Un éventuel 'learner' ou 'superadmin' que le user aurait sera préservé
-  // en aval par handleRolesSave (parent).
-  const [roles, setRoles] = useState<string[]>(
-    user.roles.filter((r) => r === 'admin' || r === 'trainer'),
-  );
-  const [saving, setSaving] = useState(false);
-
-  async function handleSubmit() {
-    if (roles.length === 0) {
-      onError('Au moins un rôle staff (Admin ou Formateur) est requis');
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave(roles);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal title={`Rôles de ${user.fullName}`} onClose={onClose}
-      footer={
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Annuler</button>
-          <button onClick={handleSubmit} disabled={saving || roles.length === 0} className="flex-1 px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
-            {saving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        </div>
-      }
-    >
-      <div className="space-y-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Rôles *</label>
-          <RoleTagSelect
-            options={STAFF_ROLE_OPTIONS}
-            value={roles}
-            onChange={setRoles}
-            placeholder="Choisir un ou plusieurs rôles..."
-            ariaLabel={`Rôles de ${user.fullName}`}
-          />
-          {roles.length === 0 && (
-            <p className="mt-1 text-xs text-red-600">Au moins un rôle est requis.</p>
-          )}
-        </div>
-        <p className="text-xs text-gray-500">
-          {user.email}
-        </p>
       </div>
     </Modal>
   );
