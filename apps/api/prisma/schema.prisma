@@ -164,7 +164,7 @@ model Formation {
   createdAt                 DateTime    @default(now()) @map("created_at")
   updatedAt                 DateTime    @updatedAt @map("updated_at")
 
-  trainer                   User?       @relation("TrainerFormations", fields: [trainerId], references: [id])
+  trainer                   User?       @relation("TrainerFormations", fields: [trainerId], references: [id], onDelete: SetNull)
   modules                   Module[]
   enrollments               Enrollment[]
   dendreoSessions           DendreoSession[]

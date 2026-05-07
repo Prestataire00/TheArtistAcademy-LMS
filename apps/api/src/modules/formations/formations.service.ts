@@ -1,5 +1,41 @@
+import { UserRole } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
+
+const ASSIGNABLE_TRAINER_ROLES: UserRole[] = ['admin', 'trainer'];
+
+/**
+ * Liste les users assignables comme formateur principal d'une formation
+ * (admin + trainer, isActive=true). Distinct de listTrainers (admin.service)
+ * qui filtre uniquement sur role='trainer' pour d'autres usages.
+ */
+export async function listAvailableTrainers() {
+  return prisma.user.findMany({
+    where: { role: { in: ASSIGNABLE_TRAINER_ROLES }, isActive: true },
+    select: { id: true, fullName: true, email: true, role: true },
+    orderBy: { fullName: 'asc' },
+  });
+}
+
+/**
+ * Vérifie qu'un trainerId pointe sur un user existant avec un rôle
+ * assignable (admin/trainer). Lève BadRequestError sinon. No-op si null.
+ */
+async function assertAssignableTrainer(trainerId: string | null | undefined) {
+  if (trainerId == null) return;
+  const user = await prisma.user.findUnique({
+    where: { id: trainerId },
+    select: { id: true, role: true, isActive: true },
+  });
+  if (!user) {
+    throw new BadRequestError(`Formateur introuvable (id=${trainerId})`);
+  }
+  if (!ASSIGNABLE_TRAINER_ROLES.includes(user.role)) {
+    throw new BadRequestError(
+      `Le user ${trainerId} a le rôle "${user.role}" — seuls les rôles admin et trainer peuvent être assignés comme formateur`,
+    );
+  }
+}
 
 export async function listFormations() {
   const formations = await prisma.formation.findMany({
@@ -35,6 +71,7 @@ export async function getFormation(id: string) {
   const formation = await prisma.formation.findUnique({
     where: { id },
     include: {
+      trainer: { select: { id: true, fullName: true, email: true, role: true } },
       modules: {
         orderBy: { position: 'asc' },
         include: {
@@ -53,6 +90,8 @@ export async function getFormation(id: string) {
     pathwayMode: formation.pathwayMode,
     videoCompletionThreshold: formation.videoCompletionThreshold,
     isPublished: formation.isPublished,
+    trainerId: formation.trainerId,
+    trainer: formation.trainer,
     createdAt: formation.createdAt.toISOString(),
     updatedAt: formation.updatedAt.toISOString(),
     modules: formation.modules.map((m) => ({
@@ -87,6 +126,7 @@ export async function createFormation(data: {
   isPublished?: boolean;
   trainerId?: string | null;
 }) {
+  await assertAssignableTrainer(data.trainerId);
   return prisma.formation.create({ data });
 }
 
@@ -104,6 +144,11 @@ export async function updateFormation(
 ) {
   const exists = await prisma.formation.findUnique({ where: { id } });
   if (!exists) throw new NotFoundError('Formation');
+  // 'trainerId' in data distingue "non fourni" (skip check) de "fourni à null"
+  // (désassignation, autorisée).
+  if ('trainerId' in data) {
+    await assertAssignableTrainer(data.trainerId);
+  }
   return prisma.formation.update({ where: { id }, data });
 }
 

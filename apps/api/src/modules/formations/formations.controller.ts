@@ -25,6 +25,11 @@ export async function list(_req: Request, res: Response) {
   res.json({ data: formations });
 }
 
+export async function availableTrainers(_req: Request, res: Response) {
+  const data = await service.listAvailableTrainers();
+  res.json({ data });
+}
+
 export async function detail(req: Request, res: Response) {
   const formation = await service.getFormation(req.params.id);
   res.json({ data: formation });

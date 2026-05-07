@@ -13,6 +13,12 @@ adminFormationsRouter.get('/', asyncHandler(ctrl.list));
 // POST   /api/v1/admin/formations          — Créer
 adminFormationsRouter.post('/', asyncHandler(ctrl.create));
 
+// GET    /api/v1/admin/formations/available-trainers — Liste users
+// assignables comme formateur principal (admin + trainer). Doit être
+// déclaré AVANT /:id pour que le matching d'Express ne le considère pas
+// comme un id de formation.
+adminFormationsRouter.get('/available-trainers', asyncHandler(ctrl.availableTrainers));
+
 // GET    /api/v1/admin/formations/:id      — Détail
 adminFormationsRouter.get('/:id', asyncHandler(ctrl.detail));
 

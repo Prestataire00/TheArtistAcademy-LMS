@@ -43,7 +43,13 @@ interface Trainer {
   id: string;
   fullName: string;
   email: string;
+  role: 'admin' | 'trainer';
 }
+
+const ROLE_LABEL_FR: Record<Trainer['role'], string> = {
+  admin: 'Admin',
+  trainer: 'Formateur',
+};
 
 export default function AdminFormationsPage() {
   const [formations, setFormations] = useState<Formation[]>([]);
@@ -404,7 +410,7 @@ function FormationSlideOver({ initial, onSave, onClose, onError }: {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get<{ data: Trainer[] }>('/admin/trainers')
+    api.get<{ data: Trainer[] }>('/admin/formations/available-trainers')
       .then((res) => setTrainers(res.data))
       .catch(() => {});
   }, []);
@@ -433,7 +439,9 @@ function FormationSlideOver({ initial, onSave, onClose, onError }: {
           <label className="block text-sm font-medium text-gray-700 mb-1">Formateur assigné</label>
           <select value={trainerId ?? ''} onChange={(e) => setTrainerId(e.target.value || null)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
             <option value="">Aucun formateur</option>
-            {trainers.map((t) => <option key={t.id} value={t.id}>{t.fullName} ({t.email})</option>)}
+            {trainers.map((t) => (
+              <option key={t.id} value={t.id}>{t.fullName} ({ROLE_LABEL_FR[t.role]})</option>
+            ))}
           </select>
         </div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Mode de parcours</label><select value={pathwayMode} onChange={(e) => setPathwayMode(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"><option value="free">Libre (non linéaire)</option><option value="linear">Linéaire</option></select></div>
