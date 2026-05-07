@@ -8,7 +8,7 @@ import { logEvent } from '../../shared/eventLog.service';
 import * as service from './reminders.service';
 
 export const remindersRouter = Router();
-remindersRouter.use(authenticate, requireRole('admin'));
+remindersRouter.use(authenticate, requireRole('admin', 'superadmin'));
 
 // ─── Journal ─────────────────────────────────────────────────────────────────
 

@@ -131,6 +131,24 @@ describe('Régression admin routes — multi-rôles + mounting', () => {
     expect(res.status).toBe(200);
   });
 
+  it("user roles=['superadmin'] : GET /admin/dashboard/stats renvoie 200", async () => {
+    // Sans hiérarchie automatique, les routers admin-only doivent lister
+    // explicitement 'superadmin' à côté de 'admin'. Test garde-fou : un
+    // superadmin doit traverser adminRouter (élargi à admin+superadmin).
+    const res = await request(app)
+      .get('/api/v1/admin/dashboard/stats')
+      .set('Authorization', `Bearer ${tokenFor(['superadmin'])}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("user roles=['superadmin'] : GET /admin/utilisateurs renvoie 200", async () => {
+    // adminUsersRouter est aussi élargi à admin+superadmin.
+    const res = await request(app)
+      .get('/api/v1/admin/utilisateurs')
+      .set('Authorization', `Bearer ${tokenFor(['superadmin'])}`);
+    expect(res.status).toBe(200);
+  });
+
   it("user roles=['trainer'] uniquement : 403 sur /admin/dashboard/stats", async () => {
     // Garde-fou anti-élargissement : un trainer non-admin ne doit PAS
     // pouvoir lire le dashboard admin. Le fait qu'on ait élargi les

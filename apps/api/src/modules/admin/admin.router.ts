@@ -7,7 +7,7 @@ import { generatePreviewUrlByUaId } from '../resources/resources.service';
 import { createSignedUrl } from '../videos/videos.service';
 
 export const adminRouter = Router();
-adminRouter.use(authenticate, requireRole('admin'));
+adminRouter.use(authenticate, requireRole('admin', 'superadmin'));
 
 // GET /api/v1/admin/trainers — Liste des formateurs (pour assignation)
 adminRouter.get('/trainers', asyncHandler(async (_req: Request, res: Response) => {

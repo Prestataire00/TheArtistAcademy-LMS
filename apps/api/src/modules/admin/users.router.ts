@@ -7,7 +7,7 @@ import { logEvent } from '../../shared/eventLog.service';
 import * as service from './users.service';
 
 export const adminUsersRouter = Router();
-adminUsersRouter.use(authenticate, requireRole('admin'));
+adminUsersRouter.use(authenticate, requireRole('admin', 'superadmin'));
 
 const DEPRECATED_ROLE_MESSAGE = "Field 'role' is deprecated. Use 'roles' (array) instead.";
 

@@ -5,7 +5,7 @@ import { asyncHandler } from '../../shared/errors';
 import * as ctrl from './formations.controller';
 
 export const adminFormationsRouter = Router();
-adminFormationsRouter.use(authenticate, requireRole('admin'));
+adminFormationsRouter.use(authenticate, requireRole('admin', 'superadmin'));
 
 // GET    /api/v1/admin/formations          — Liste
 adminFormationsRouter.get('/', asyncHandler(ctrl.list));

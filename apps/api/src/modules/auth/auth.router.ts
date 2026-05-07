@@ -36,7 +36,7 @@ if (env.NODE_ENV === 'development') {
 }
 
 // GET /api/v1/auth/sso/status — Diagnostic SSO (admin)
-authRouter.get('/sso/status', authenticate, requireRole('admin'), getSsoStatus);
+authRouter.get('/sso/status', authenticate, requireRole('admin', 'superadmin'), getSsoStatus);
 
 // GET /api/v1/auth/me — Infos utilisateur courant
 authRouter.get('/me', authenticate, (req, res) => {

@@ -6,7 +6,7 @@ import { logEvent } from '../../shared/eventLog.service';
 import * as service from './exports.service';
 
 export const exportsRouter = Router();
-exportsRouter.use(authenticate, requireRole('admin'));
+exportsRouter.use(authenticate, requireRole('admin', 'superadmin'));
 
 function timestamp() {
   const d = new Date();
