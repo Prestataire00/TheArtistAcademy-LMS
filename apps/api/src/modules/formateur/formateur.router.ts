@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
+import { ensureAssignedTrainer } from '../../shared/formation-assignment.guard';
 import { asyncHandler, BadRequestError } from '../../shared/errors';
 import * as ctrl from './formateur.controller';
 import * as contenusCtrl from './formateur.contenus.controller';
@@ -29,7 +30,15 @@ function handleMulterError(err: Error, _req: Request, _res: Response, next: Next
 }
 
 export const formateurRouter = Router();
-formateurRouter.use(authenticate, requireRole('trainer'));
+// Phase 2A bis — chantier 3 : l'accès à /formateur/* dépend désormais
+// de l'assignation comme formateur principal sur au moins une formation
+// (Formation.trainerId = user.id), pas du rôle. Un admin assigné voit le
+// même contenu qu'un trainer assigné, un trainer non assigné est bloqué.
+formateurRouter.use(
+  authenticate,
+  requireRole('trainer', 'admin', 'superadmin'),
+  ensureAssignedTrainer(),
+);
 
 // ─── Suivi pedagogique ────────────────────────────────────────────────────────
 formateurRouter.get('/sessions', asyncHandler(ctrl.listSessions));

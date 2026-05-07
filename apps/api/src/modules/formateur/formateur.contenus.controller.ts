@@ -5,6 +5,7 @@ import * as quizService from '../quizzes/quizzes.service';
 import * as resourceService from '../resources/resources.service';
 import { logEvent } from '../../shared/eventLog.service';
 import { BadRequestError } from '../../shared/errors';
+import { requireUaOwnership } from '../../shared/formation-assignment.guard';
 
 // ─── Liste contenus editables ─────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ export async function listContent(req: Request, res: Response) {
 // ─── Quiz : lecture + edition ─────────────────────────────────────────────────
 
 export async function getQuiz(req: Request, res: Response) {
+  await requireUaOwnership(req.params.uaId, req.user!.userId);
   const quiz = await quizService.getQuizAdmin(req.params.uaId);
   res.json({ data: quiz });
 }
@@ -51,6 +53,7 @@ const upsertQuizSchema = z.object({
 
 export async function upsertQuiz(req: Request, res: Response) {
   const uaId = req.params.uaId;
+  await requireUaOwnership(uaId, req.user!.userId);
   const parsed = upsertQuizSchema.safeParse(req.body);
   if (!parsed.success) {
     throw new BadRequestError(parsed.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '));
@@ -74,6 +77,7 @@ export async function upsertQuiz(req: Request, res: Response) {
 
 export async function uploadResource(req: Request, res: Response) {
   const uaId = req.params.uaId;
+  await requireUaOwnership(uaId, req.user!.userId);
   const file = req.file;
   if (!file) throw new BadRequestError('Fichier manquant');
 
@@ -93,6 +97,7 @@ export async function uploadResource(req: Request, res: Response) {
 
 export async function deleteResource(req: Request, res: Response) {
   const uaId = req.params.uaId;
+  await requireUaOwnership(uaId, req.user!.userId);
   await resourceService.deleteResource(uaId);
 
   await logEvent({
@@ -108,6 +113,7 @@ export async function deleteResource(req: Request, res: Response) {
 
 export async function previewResource(req: Request, res: Response) {
   const uaId = req.params.uaId;
+  await requireUaOwnership(uaId, req.user!.userId);
   const result = await resourceService.generatePreviewUrlByUaId(uaId);
   res.json({ data: result });
 }

@@ -7,16 +7,20 @@ export async function listSessions(req: Request, res: Response) {
 }
 
 export async function listApprenants(req: Request, res: Response) {
-  const data = await service.listApprenants(req.params.formationId);
+  const data = await service.listApprenants(req.params.formationId, req.user!.userId);
   res.json({ data });
 }
 
 export async function getApprenantDetail(req: Request, res: Response) {
-  const data = await service.getApprenantDetail(req.params.formationId, req.params.userId);
+  const data = await service.getApprenantDetail(
+    req.params.formationId,
+    req.params.userId,
+    req.user!.userId,
+  );
   res.json({ data });
 }
 
 export async function getSessionStats(req: Request, res: Response) {
-  const data = await service.getSessionStats(req.params.formationId);
+  const data = await service.getSessionStats(req.params.formationId, req.user!.userId);
   res.json({ data });
 }

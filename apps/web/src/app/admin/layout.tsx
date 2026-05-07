@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { ToastProvider } from '@/components/admin/ToastContext';
 import { LogoutButton } from '@/components/LogoutButton';
+import { useUserContext } from '@/lib/useUserContext';
 
 const navItems = [
   { href: '/admin', label: 'Tableau de bord', exact: true },
@@ -18,6 +19,15 @@ const navItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { role, isAssignedTrainer } = useUserContext();
+
+  // Bouton de bascule "Mes formations" : visible uniquement pour les
+  // admins/superadmins assignés comme formateur principal sur ≥1 formation.
+  // Trainer pur : pas de bouton (il est déjà sur l'unique espace qui lui
+  // est destiné). Admin non assigné : pas de bouton (rien à voir côté
+  // formateur).
+  const showSwitchToFormateur =
+    (role === 'admin' || role === 'superadmin') && isAssignedTrainer === true;
 
   function isActive(href: string, exact?: boolean) {
     return exact ? pathname === href : pathname.startsWith(href);
@@ -43,6 +53,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navLinks = (onClick?: () => void) => (
     <nav className="space-y-1">
+      {showSwitchToFormateur && (
+        <>
+          <a
+            href="/formateur/sessions"
+            onClick={onClick}
+            className="block px-3 py-3 md:py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0 flex items-center gap-2 text-brand-400 hover:text-white hover:bg-white/5 border border-brand-400/30"
+            aria-label="Basculer vers Mes formations"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h18m0 0l-6-6m6 6l-6 6" />
+            </svg>
+            <span>Mes formations</span>
+          </a>
+          <div className="my-3 border-t border-white/10" aria-hidden="true" />
+        </>
+      )}
       {navItems.map((item) => (
         <a
           key={item.href}

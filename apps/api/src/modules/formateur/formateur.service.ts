@@ -1,5 +1,21 @@
 import { prisma } from '../../config/database';
-import { NotFoundError } from '../../shared/errors';
+import { NotFoundError, ForbiddenError } from '../../shared/errors';
+
+/**
+ * Vérifie que la formation existe ET que le user est son trainer assigné.
+ * Sinon 403 ("formation introuvable" expose la liste des formations en
+ * énumérant les ids ; on préfère bloquer en 403 sans distinguer
+ * "n'existe pas" et "n'appartient pas").
+ */
+async function requireFormationOwnership(formationId: string, trainerId: string) {
+  const formation = await prisma.formation.findFirst({
+    where: { id: formationId, trainerId },
+  });
+  if (!formation) {
+    throw new ForbiddenError('Cette formation ne vous est pas assignée');
+  }
+  return formation;
+}
 
 /**
  * Liste les formations dont le formateur est responsable (trainerId),
@@ -54,10 +70,11 @@ export async function listSessions(trainerId: string) {
 
 /**
  * Liste les apprenants d'une formation avec leur progression.
+ * Le trainerId est requis : on refuse 403 si le user n'est pas trainer
+ * de la formation cible.
  */
-export async function listApprenants(formationId: string) {
-  const formation = await prisma.formation.findUnique({ where: { id: formationId } });
-  if (!formation) throw new NotFoundError('Formation');
+export async function listApprenants(formationId: string, trainerId: string) {
+  const formation = await requireFormationOwnership(formationId, trainerId);
 
   const enrollments = await prisma.enrollment.findMany({
     where: { formationId },
@@ -112,8 +129,12 @@ export async function listApprenants(formationId: string) {
 
 /**
  * Detail individuel d'un apprenant : progression par module/UA, quiz.
+ * Le trainerId est requis : on refuse 403 si le user n'est pas trainer
+ * de la formation cible.
  */
-export async function getApprenantDetail(formationId: string, userId: string) {
+export async function getApprenantDetail(formationId: string, userId: string, trainerId: string) {
+  await requireFormationOwnership(formationId, trainerId);
+
   const enrollment = await prisma.enrollment.findFirst({
     where: { formationId, userId },
     include: {
@@ -226,10 +247,11 @@ export async function getApprenantDetail(formationId: string, userId: string) {
 
 /**
  * Statistiques agregees d'une formation/session.
+ * Le trainerId est requis : on refuse 403 si le user n'est pas trainer
+ * de la formation cible.
  */
-export async function getSessionStats(formationId: string) {
-  const formation = await prisma.formation.findUnique({ where: { id: formationId } });
-  if (!formation) throw new NotFoundError('Formation');
+export async function getSessionStats(formationId: string, trainerId: string) {
+  const formation = await requireFormationOwnership(formationId, trainerId);
 
   const enrollments = await prisma.enrollment.findMany({
     where: { formationId },

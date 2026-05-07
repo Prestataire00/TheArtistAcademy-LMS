@@ -8,6 +8,7 @@ import { ssoRateLimiter, loginRateLimiter } from '../../middleware/rateLimiter';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/requireRole';
 import { asyncHandler } from '../../shared/errors';
+import { userIsAssignedTrainer } from '../../shared/formation-assignment.guard';
 import { env } from '../../config/env';
 
 export const authRouter = Router();
@@ -42,3 +43,12 @@ authRouter.get('/sso/status', authenticate, requireRole('admin', 'superadmin'), 
 authRouter.get('/me', authenticate, (req, res) => {
   res.json({ user: req.user });
 });
+
+// GET /api/v1/auth/me/is-assigned-trainer — Le user authentifié est-il
+// assigné comme formateur sur au moins une formation (Formation.trainerId) ?
+// Utilisé par le frontend pour décider d'afficher le bouton de bascule
+// admin↔formateur dans la sidebar.
+authRouter.get('/me/is-assigned-trainer', authenticate, asyncHandler(async (req, res) => {
+  const isAssignedTrainer = await userIsAssignedTrainer(req.user!.userId);
+  res.json({ isAssignedTrainer });
+}));
