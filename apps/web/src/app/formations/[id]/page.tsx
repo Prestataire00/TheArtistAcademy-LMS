@@ -17,11 +17,12 @@ interface FormationPageData {
     pathwayMode: 'linear' | 'free';
     trainerName?: string | null;
   };
+  // null en mode preview staff (admin/superadmin/trainer) — pas d'inscription
   enrollment: {
     id: string;
     startDate: string;
     endDate: string;
-  };
+  } | null;
   progress: {
     status: CompletionStatus;
     progressPercent: number;
@@ -275,7 +276,9 @@ export default function FormationPage() {
 
           {/* Meta infos — texte simple, sans icones */}
           <div className="flex flex-wrap gap-x-4 sm:gap-x-6 gap-y-1 text-xs text-gray-500 mb-3">
-            <span>Du {formatDate(enrollment.startDate)} au {formatDate(enrollment.endDate)}</span>
+            {enrollment && (
+              <span>Du {formatDate(enrollment.startDate)} au {formatDate(enrollment.endDate)}</span>
+            )}
             <span>Temps : {formatDuration(progress.timeSpentSeconds)}</span>
             <span>{progress.completedUAs}/{progress.totalUAs} activités</span>
           </div>

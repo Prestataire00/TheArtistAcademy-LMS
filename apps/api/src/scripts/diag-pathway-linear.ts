@@ -93,7 +93,7 @@ async function main() {
 
   // ── Étape 3 : payload getPlayerFormation ─────────────────────────────────────
   section('3. Payload GET /player/formations/:id');
-  const payload = await getPlayerFormation(learner.id, formation.id);
+  const payload = await getPlayerFormation(learner.id, formation.id, learner.role);
   console.log(`pathwayMode dans payload  : ${payload.formation.pathwayMode}`);
   console.log(`continueUaId             : ${payload.continueUaId}`);
   console.log(`Modules :`);

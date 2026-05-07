@@ -1,67 +1,87 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
-import { CompletionStatus } from '@prisma/client';
+import { CompletionStatus, UserRole } from '@prisma/client';
 import { logger } from '../../shared/logger';
 import { computePathwayLocks } from '../../shared/pathway';
+
+const STAFF_ROLES: UserRole[] = ['admin', 'superadmin', 'trainer'];
 
 /**
  * Retourne les données complètes de la formation pour un apprenant :
  * formation, modules, UAs, progression, enrollment.
+ *
+ * Pour les rôles staff (admin/superadmin/trainer), on bypass entièrement le
+ * check d'enrollment — ils peuvent prévisualiser n'importe quelle formation
+ * publiée comme un apprenant. Le filtre par assignation pour les trainers
+ * (un trainer ne voit que les formations qu'il anime) est prévu au chantier
+ * 2/3 ; pour l'instant tous les trainers ont accès.
  */
-export async function getPlayerFormation(userId: string, formationId: string) {
-  // Lookup d'abord l'enrollment sans filtre date/status pour donner un message
-  // précis selon la cause d'inactivité (sinon "pas d'inscription active" couvre
-  // 4 cas distincts et bloque le diagnostic).
+export async function getPlayerFormation(
+  userId: string,
+  formationId: string,
+  role: UserRole,
+) {
+  const isStaff = STAFF_ROLES.includes(role);
   const now = new Date();
-  const anyEnrollment = await prisma.enrollment.findFirst({
-    where: { userId, formationId },
-    orderBy: { createdAt: 'desc' },
-  });
 
-  if (!anyEnrollment) {
-    // Diagnostic : logger ce que l'API voit en DB pour ce user
-    const userExists = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, role: true },
+  // Pour un learner, exiger un enrollment actif dans la fenêtre. Pour le
+  // staff, on saute toute cette section (preview).
+  let enrollment: { id: string; startDate: Date; endDate: Date } | null = null;
+
+  if (!isStaff) {
+    // Lookup d'abord l'enrollment sans filtre date/status pour donner un
+    // message précis selon la cause d'inactivité (sinon "pas d'inscription
+    // active" couvre 4 cas distincts et bloque le diagnostic).
+    const anyEnrollment = await prisma.enrollment.findFirst({
+      where: { userId, formationId },
+      orderBy: { createdAt: 'desc' },
     });
-    const allEnrollmentsForUser = await prisma.enrollment.findMany({
-      where: { userId },
-      select: { id: true, formationId: true, status: true },
-    });
-    const formationExists = await prisma.formation.findUnique({
-      where: { id: formationId },
-      select: { id: true, title: true },
-    });
-    logger.warn('[player] enrollment introuvable — diagnostic', {
-      requestedUserId: userId,
-      requestedFormationId: formationId,
-      userInDb: userExists,
-      formationInDb: formationExists,
-      allEnrollmentsForUserCount: allEnrollmentsForUser.length,
-      allEnrollmentsForUser,
-    });
-    throw new BadRequestError("Aucune inscription trouvée pour cette formation");
-  }
 
-  if (anyEnrollment.status !== 'active') {
-    throw new BadRequestError(
-      `Inscription au statut "${anyEnrollment.status}" — l'accès à la formation n'est pas ouvert`,
-    );
-  }
+    if (!anyEnrollment) {
+      // Diagnostic : logger ce que l'API voit en DB pour ce user
+      const userExists = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, role: true },
+      });
+      const allEnrollmentsForUser = await prisma.enrollment.findMany({
+        where: { userId },
+        select: { id: true, formationId: true, status: true },
+      });
+      const formationExists = await prisma.formation.findUnique({
+        where: { id: formationId },
+        select: { id: true, title: true },
+      });
+      logger.warn('[player] enrollment introuvable — diagnostic', {
+        requestedUserId: userId,
+        requestedFormationId: formationId,
+        userInDb: userExists,
+        formationInDb: formationExists,
+        allEnrollmentsForUserCount: allEnrollmentsForUser.length,
+        allEnrollmentsForUser,
+      });
+      throw new BadRequestError("Aucune inscription trouvée pour cette formation");
+    }
 
-  if (anyEnrollment.startDate > now) {
-    throw new BadRequestError(
-      `Accès non encore ouvert — débute le ${anyEnrollment.startDate.toISOString().slice(0, 10)}`,
-    );
-  }
+    if (anyEnrollment.status !== 'active') {
+      throw new BadRequestError(
+        `Inscription au statut "${anyEnrollment.status}" — l'accès à la formation n'est pas ouvert`,
+      );
+    }
 
-  if (anyEnrollment.endDate < now) {
-    throw new BadRequestError(
-      `Accès expiré — terminé le ${anyEnrollment.endDate.toISOString().slice(0, 10)}`,
-    );
-  }
+    if (anyEnrollment.startDate > now) {
+      throw new BadRequestError(
+        `Accès non encore ouvert — débute le ${anyEnrollment.startDate.toISOString().slice(0, 10)}`,
+      );
+    }
 
-  const enrollment = anyEnrollment;
+    if (anyEnrollment.endDate < now) {
+      throw new BadRequestError(
+        `Accès expiré — terminé le ${anyEnrollment.endDate.toISOString().slice(0, 10)}`,
+      );
+    }
+
+    enrollment = anyEnrollment;
+  }
 
   // Charger la formation complète
   const formation = await prisma.formation.findUnique({
@@ -81,11 +101,12 @@ export async function getPlayerFormation(userId: string, formationId: string) {
   });
   if (!formation) throw new NotFoundError('Formation');
 
-  // Charger toutes les progressions de cet enrollment
-  const [uaProgresses, formationProgress] = await Promise.all([
-    prisma.uAProgress.findMany({ where: { enrollmentId: enrollment.id } }),
-    prisma.formationProgress.findUnique({ where: { enrollmentId: enrollment.id } }),
-  ]);
+  // Charger toutes les progressions de cet enrollment. Pour le staff
+  // (enrollment=null), on retourne une vue vide : tous les UAs s'afficheront
+  // comme not_started, totalTimeSpent=0, etc.
+  const uaProgresses = enrollment
+    ? await prisma.uAProgress.findMany({ where: { enrollmentId: enrollment.id } })
+    : [];
 
   const uaProgressMap = new Map(uaProgresses.map((p) => [p.uaId, p]));
   const uaStatusMap = new Map<string, CompletionStatus>(
@@ -176,11 +197,13 @@ export async function getPlayerFormation(userId: string, formationId: string) {
       pathwayMode: formation.pathwayMode,
       videoCompletionThreshold: formation.videoCompletionThreshold,
     },
-    enrollment: {
-      id: enrollment.id,
-      startDate: enrollment.startDate.toISOString(),
-      endDate: enrollment.endDate.toISOString(),
-    },
+    enrollment: enrollment
+      ? {
+          id: enrollment.id,
+          startDate: enrollment.startDate.toISOString(),
+          endDate: enrollment.endDate.toISOString(),
+        }
+      : null,
     progress: {
       status: globalStatus,
       progressPercent: globalProgressPercent,
