@@ -253,14 +253,20 @@ export default function FormateurContenusPage() {
 
         {formations.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-            <p className="text-gray-400">Aucun contenu editable</p>
+            <p className="text-gray-400">Aucune formation publiée ne vous est assignée pour l&apos;instant.</p>
           </div>
         ) : (
           <div className="space-y-8">
             {formations.map((f) => (
               <div key={f.formationId}>
                 <h2 className="text-lg font-semibold text-gray-900 mb-3">{f.title}</h2>
-                {f.modules.map((mod) => (
+                {f.modules.length === 0 ? (
+                  <div className="bg-white rounded-lg border border-dashed border-gray-200 px-5 py-6 text-center">
+                    <p className="text-sm text-gray-400">
+                      Cette formation n&apos;a pas encore de contenu éditable. Demandez à l&apos;administrateur d&apos;ajouter des modules avec quiz ou ressources.
+                    </p>
+                  </div>
+                ) : f.modules.map((mod) => (
                   <div key={mod.moduleId} className="mb-4">
                     <h3 className="text-sm font-medium text-gray-500 mb-2">{mod.title}</h3>
                     <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">

@@ -18,12 +18,14 @@ async function requireFormationOwnership(formationId: string, trainerId: string)
 }
 
 /**
- * Liste les formations dont le formateur est responsable (trainerId),
- * avec enrollments actifs.
+ * Liste les formations dont le formateur est responsable (trainerId).
+ * Conditions cumulées : formation publiée + au moins un enrollment.
+ * Une formation en brouillon ou sans inscrit n'apparaît pas dans
+ * "Mes sessions" — pour gérer le contenu en amont, voir /formateur/contenus.
  */
 export async function listSessions(trainerId: string) {
   const formations = await prisma.formation.findMany({
-    where: { trainerId, enrollments: { some: {} } },
+    where: { trainerId, isPublished: true, enrollments: { some: {} } },
     orderBy: { createdAt: 'desc' },
     include: {
       _count: { select: { modules: true } },
