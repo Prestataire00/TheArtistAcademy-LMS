@@ -1,4 +1,3 @@
-import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/database';
 import { logEvent } from '../../shared/eventLog.service';
 import { BadRequestError, NotFoundError } from '../../shared/errors';
@@ -42,6 +41,116 @@ interface UserWebhookPayload {
   };
 }
 
+type MatchAction =
+  | 'matched_by_dendreo_id'
+  | 'matched_by_email'
+  | 'collision_created'
+  | 'created_new';
+
+interface CollisionInfo {
+  originalEmail: string;
+  existingUserId: string;
+  existingDendreoUserId: string;
+  newUserId: string;
+  newDendreoUserId: string;
+}
+
+interface MatchResult {
+  user: { id: string };
+  action: MatchAction;
+  collision?: CollisionInfo;
+}
+
+interface MatchArgs {
+  dendreoUserId: string | null;
+  externalId: string | null;
+  email: string;
+  fullName: string;
+  tmsOrigin: string;
+}
+
+// Stratégie de matching pour `user.created` (bug c) :
+//   1. dendreoUserId  → update (jamais role/passwordHash)
+//   2a. email + pas de dendreoUserId existant → rattachement
+//   2b. email + dendreoUserId DIFFÉRENT → collision (création séparée, user existant intact)
+//   3. aucun match → création standard
+async function matchOrCreateUser(args: MatchArgs): Promise<MatchResult> {
+  const { dendreoUserId, externalId, email, fullName, tmsOrigin } = args;
+
+  if (dendreoUserId) {
+    const byDendreo = await prisma.user.findUnique({ where: { dendreoUserId } });
+    if (byDendreo) {
+      const updated = await prisma.user.update({
+        where: { id: byDendreo.id },
+        data: {
+          fullName,
+          ...(externalId ? { externalId } : {}),
+          tmsOrigin,
+          isActive: true,
+        },
+      });
+      return { user: updated, action: 'matched_by_dendreo_id' };
+    }
+  }
+
+  const byEmail = await prisma.user.findUnique({ where: { email } });
+  if (byEmail) {
+    if (
+      dendreoUserId &&
+      byEmail.dendreoUserId &&
+      byEmail.dendreoUserId !== dendreoUserId
+    ) {
+      const created = await prisma.user.create({
+        data: {
+          email: `dendreo-${dendreoUserId}@no-email.local`,
+          fullName,
+          dendreoUserId,
+          ...(externalId ? { externalId } : {}),
+          tmsOrigin,
+          role: 'learner',
+          isActive: true,
+        },
+      });
+      return {
+        user: created,
+        action: 'collision_created',
+        collision: {
+          originalEmail: email,
+          existingUserId: byEmail.id,
+          existingDendreoUserId: byEmail.dendreoUserId,
+          newUserId: created.id,
+          newDendreoUserId: dendreoUserId,
+        },
+      };
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: byEmail.id },
+      data: {
+        fullName,
+        ...(dendreoUserId && !byEmail.dendreoUserId ? { dendreoUserId } : {}),
+        ...(externalId ? { externalId } : {}),
+        tmsOrigin,
+        isActive: true,
+      },
+    });
+    return { user: updated, action: 'matched_by_email' };
+  }
+
+  const created = await prisma.user.create({
+    data: {
+      email,
+      fullName,
+      ...(dendreoUserId ? { dendreoUserId } : {}),
+      ...(externalId ? { externalId } : {}),
+      tmsOrigin,
+      role: 'learner',
+      isActive: true,
+    },
+  });
+  return { user: created, action: 'created_new' };
+}
+
 export async function handleUserWebhook(payload: UserWebhookPayload) {
   if (payload.event !== 'user.created') {
     throw new BadRequestError(`Événement non supporté: ${payload.event}`);
@@ -57,50 +166,48 @@ export async function handleUserWebhook(payload: UserWebhookPayload) {
     throw new BadRequestError('email et nom complet (firstname+lastname ou full_name) sont requis');
   }
 
-  // Hash le password si fourni (nouvelle spec)
-  const passwordHash = d.password ? await bcrypt.hash(d.password, 12) : undefined;
-
-  // Pont d'identité Dendreo : on remplit aussi `dendreoUserId` (en plus du
-  // générique `externalId`) parce que c'est cette colonne que la
-  // résolution SSO interroge en fallback (cf. auth.service.findUserForSso)
-  // et c'est la clé sur laquelle le futur fix du matching user.created
-  // s'appuiera (cf. bug c — "matcher d'abord sur dendreo_user_id"). Tant
-  // que les deux colonnes coexistent, on les garde synchronisées.
+  // Pont d'identité Dendreo : `dendreoUserId` n'est rempli que pour tms_origin=dendreo
+  // pour ne pas conflater l'identité Dendreo avec celle d'un autre TMS futur.
   const dendreoUserId = tmsOrigin === 'dendreo' ? externalId : null;
 
-  const user = await prisma.user.upsert({
-    where: { email: d.email },
-    update: {
-      fullName,
-      externalId,
-      ...(dendreoUserId ? { dendreoUserId } : {}),
-      tmsOrigin,
-      isActive: true,
-      ...(passwordHash ? { passwordHash } : {}),
-    },
-    create: {
-      email: d.email,
-      fullName,
-      externalId,
-      ...(dendreoUserId ? { dendreoUserId } : {}),
-      tmsOrigin,
-      role: 'learner',
-      ...(passwordHash ? { passwordHash } : {}),
-    },
+  const result = await matchOrCreateUser({
+    dendreoUserId,
+    externalId,
+    email: d.email,
+    fullName,
+    tmsOrigin,
   });
 
   await logEvent({
     category: 'webhook',
     action: 'user.created',
-    userId: user.id,
+    userId: result.user.id,
     entityType: 'user',
-    entityId: user.id,
-    payload: { externalId, email: d.email },
+    entityId: result.user.id,
+    payload: { externalId, email: d.email, matchAction: result.action },
   });
 
-  logger.info('Dendreo webhook: user created/updated', { userId: user.id, email: d.email });
+  if (result.action === 'collision_created' && result.collision) {
+    await logEvent({
+      category: 'webhook',
+      action: 'dendreo.collision',
+      userId: result.user.id,
+      entityType: 'user',
+      entityId: result.user.id,
+      payload: {
+        ...result.collision,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
 
-  return { user_id: user.id };
+  logger.info('Dendreo webhook: user created/updated', {
+    userId: result.user.id,
+    email: d.email,
+    action: result.action,
+  });
+
+  return { user_id: result.user.id };
 }
 
 // ─── Sessions webhook ────────────────────────────────────────────────────────
