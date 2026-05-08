@@ -1,7 +1,7 @@
 # Intégration Dendreo — Notes de tests
 
 > Document de référence pour l'intégration avec le Connecteur LMS Universel Dendreo.
-> Dernière mise à jour : 07/05/2026 — **Phase 2A revertée (multi-rôles abandonné), retour au mono-rôle + assignation formation (Phase 2A bis)**.
+> Dernière mise à jour : 08/05/2026 — **Phase 2B livrée (refonte handler `user.created`, bug c résolu, déployée en prod)**.
 
 ---
 
@@ -227,13 +227,87 @@ Le bon modèle est documenté dans **Phase 2A bis** ci-dessous.
 
 ---
 
+## Phase 2B — Refonte du handler `user.created` (✅ DÉPLOYÉE EN PROD 08/05/2026)
+
+> 📌 **Bug c résolu** — commit `5fcdf27`, tag `v0.6-dendreo-user-matching`. Bloqueur prod levé.
+
+### Contexte
+
+Avant Phase 2B, `handleUserWebhook` faisait un `prisma.user.upsert({ where: { email } })` qui matchait uniquement par email. Conséquence : un participant Dendreo partageant son email avec un user LMS existant (typiquement un admin) écrasait son profil avec les champs Dendreo (`fullName`, `externalId`, `dendreoUserId`, `tmsOrigin`). Pollution constatée sur le compte `eva.randrianasolo@gmail.com` lors de la validation sandbox (cf. cleanup ci-dessous).
+
+### Stratégie de matching `user.created` (Stratégie C)
+
+Le handler webhook `user.created` suit cet ordre strict :
+
+1. **Match par `dendreoUserId`** (= `external_id` du payload Dendreo)
+   - Si trouvé : update `fullName`, `externalId`, `tmsOrigin`, `isActive`
+   - **Ne touche jamais à `role` ni `passwordHash`**, même si le payload contient un `password`
+
+2. **Sinon, match par email**
+   - **2a.** Si user trouvé **sans** `dendreoUserId` existant
+     → rattachement (lui assigne le `dendreoUserId` + `externalId` du payload)
+   - **2b.** Si user trouvé **avec** un `dendreoUserId` **DIFFÉRENT** du payload
+     → **COLLISION détectée**
+     → user existant **N'EST PAS modifié**
+     → création d'un nouveau user avec :
+       - `email = dendreo-{external_id}@no-email.local` (placeholder ; suffixe `.local` réservé RFC 6762, non routable)
+       - `dendreoUserId = external_id`
+       - `externalId = external_id`
+       - `role = learner`
+       - `isActive = true`
+       - `passwordHash = null`
+     → `EventLog` `category=webhook`, `action=dendreo.collision` avec payload `{originalEmail, existingUserId, existingDendreoUserId, newUserId, newDendreoUserId, timestamp}`
+
+3. **Aucun match** → création normale (avec l'email du payload)
+
+`passwordHash` n'est plus jamais écrit par ce handler — l'authentification se fait via SSO Dendreo, pas par mot de passe local.
+
+Implémentation : fonction privée `matchOrCreateUser()` dans [apps/api/src/modules/dendreo/dendreo.webhooks.service.ts](../apps/api/src/modules/dendreo/dendreo.webhooks.service.ts) qui retourne `{ user, action, collision? }`. Couverture tests : [apps/api/tests/dendreo.user-webhook.test.ts](../apps/api/tests/dendreo.user-webhook.test.ts) — 9 cas (4 branches de la stratégie + régression admin `role`/`passwordHash` jamais touchés sur match + couverture bug e préservée).
+
+### Tests prod validés (3 scénarios curl)
+
+1. **Création** — `user.created` avec un nouvel `external_id` → user créé, `dendreoUserId` ET `externalId` remplis.
+2. **Re-match `dendreoUserId`** — second `user.created` avec le même `external_id` mais un email modifié → user existant mis à jour, pas de doublon, pas de pollution sur d'autres comptes.
+3. **Collision sur email partagé** — `user.created` avec un `external_id` neuf et un email déjà utilisé par un user à `dendreoUserId` différent → user existant intact, nouveau user créé avec email placeholder, `EventLog dendreo.collision` écrit.
+
+### Cleanup compte admin pollué `eva.randrianasolo@gmail.com` (08/05/2026)
+
+Le compte admin LMS de l'utilisatrice Eva avait été pollué par le bug c **avant** son fix : Dendreo avait envoyé un `user.created` pour le participant `2252` (email partagé), et le handler avait écrasé le profil admin avec `dendreoUserId=2252`, `externalId=2252`, `tmsOrigin=dendreo`.
+
+Cleanup manuel effectué via SQL Supabase **après** déploiement de la Phase 2B :
+
+1. **Dépollution de l'admin** :
+
+   ```sql
+   UPDATE users
+   SET dendreo_user_id = NULL, external_id = NULL, tms_origin = NULL
+   WHERE email = 'eva.randrianasolo@gmail.com';
+   ```
+
+2. **Création d'un nouveau user apprenant Eva avec email placeholder** :
+
+   ```sql
+   INSERT INTO users (..., email, dendreo_user_id, external_id, tms_origin, role, is_active, ...)
+   VALUES (..., 'dendreo-2252@no-email.local', '2252', '2252', 'dendreo', 'learner', true, ...);
+   ```
+
+3. **Migration de l'enrollment** (`dendreo_enrolment_id 21519`) du compte admin vers le nouveau user apprenant.
+
+4. **Suppression des users factices** créés pendant les tests prod (`99001` et `99002`).
+
+**État final** : admin dépollué + nouveau user apprenant Eva séparé + enrollment migré. La cohérence avec Dendreo est préservée (même `enrolment_id` côté Dendreo et LMS).
+
+**Risque résiduel : aucun.** Le prochain SSO de Eva 2252 depuis Dendreo matchera par `dendreoUserId` sur le user apprenant placeholder, pas sur l'admin.
+
+---
+
 ## 9. Bugs résiduels à traiter avant la prod
 
 | # | Sévérité | Bug | Notes |
 | --- | --- | --- | --- |
 | ~~a~~ | ~~Sécurité~~ | ~~Endpoints webhooks renvoient `500` au lieu de `401` quand la signature HMAC est invalide~~ | ✅ **FIXED** `544f1a4` — guard de longueur ajouté avant `timingSafeEqual` (HMAC + API key), warn log structuré sur rejet |
 | b | Race | Si `enrolment.created` arrive avant `session.created`, l'enrollment est créé sans `dendreo_session_id` | Observé sur l'enrolment EVA TEST `id 21519` — prévoir un backfill ou file d'attente |
-| **c** | **🚨 BLOQUEUR PROD — EN ATTENTE du revert Phase 2A** | **`user.created` fait un upsert sur l'`email`. Un admin Dendreo partageant son email avec un participant verrait son rôle écrasé en `learner`** | **À refondre IMPÉRATIVEMENT avant prod : matcher d'abord sur `dendreo_user_id`, ne jamais downgrade un rôle existant. N'importe quelle inscription Dendreo avec un email d'admin LMS = compromission du compte admin.** ⚠️ **Pollution déjà constatée** : le compte admin `eva.randrianasolo@gmail.com` a reçu `externalId=2252` (participant Dendreo TEST EVA) lors de la validation sandbox. ⏸️ **EN ATTENTE du revert Phase 2A** — la stratégie de matching/upsert évoluera avec le retour au mono-rôle (cf. *Phase 2A bis* ci-dessus). Le fix sera défini une fois `User.role` restauré. Cleanup manuel à prévoir pendant ce chantier pour décorréler le compte admin du participant Dendreo. |
+| ~~c~~ | ~~🚨 BLOQUEUR PROD~~ | ~~`user.created` faisait un upsert sur l'`email`, ce qui polluait un user LMS partageant l'email avec un participant Dendreo~~ | ✅ **FIXED** `5fcdf27` (tag `v0.6-dendreo-user-matching`, déployé 08/05/2026) — Stratégie C : match `dendreoUserId` first, fallback email avec garde-fou collision (création séparée + `EventLog dendreo.collision`). `passwordHash`/`role` jamais touchés sur match. Cf. *Phase 2B* ci-dessus pour la spec complète + cleanup compte admin Eva. |
 | d | Observabilité | Logging insuffisant des webhooks `user.created` et `enrolment.created` | Seul `session.created` produit un log structuré clair |
 | ~~e~~ | ~~Données~~ | ~~`users.dendreo_user_id` reste NULL alors qu'elle devrait être renseignée~~ | ✅ **FIXED** `c8e83fc` (option A — sync `dendreoUserId` ← `externalId` au webhook) + `8f104bd` (script de backfill `backfill-dendreo-user-id.ts` pour les rows existantes) |
 | ~~f~~ | ~~Feature~~ | ~~Bouton "Retour à Dendreo" non implémenté dans l'UI LMS~~ | ✅ **FIXED** — déjà implémenté dans [apps/web/src/app/formations/[id]/page.tsx](../apps/web/src/app/formations/[id]/page.tsx) (composant `DendreoReturnLink`, lit le cookie `dendreo_return_to` posé par l'API SSO, fallback `NEXT_PUBLIC_DENDREO_EXTRANET_URL`). Découvert pendant l'audit Phase 1. |
@@ -246,9 +320,10 @@ Le bon modèle est documenté dans **Phase 2A bis** ci-dessous.
 - [x] ~~Marina : activer le Connecteur LMS Universel sur la sandbox~~ ✅ 06/05/2026
 - [x] ~~Configurer le formulaire connecteur avec les valeurs de §7~~ ✅
 - [x] ~~Tester le flow complet : participant sandbox → ADF → SSO depuis l'extranet → page formation~~ ✅
-- [ ] **Traiter le bloqueur prod (§9 bug c) — impératif avant tout go-live** *(en attente du revert Phase 2A)*
+- [x] ~~**Traiter le bloqueur prod (§9 bug c) — impératif avant tout go-live**~~ ✅ 08/05/2026 — Phase 2B, commit `5fcdf27`, tag `v0.6-dendreo-user-matching`. Cleanup compte admin Eva effectué via SQL Supabase.
+- [ ] **Investiguer la cause du vidage des tables Supabase 7-8 mai 2026** — cause inconnue, hypothèse : startup script Railway ou commande Prisma destructive lors d'un déploiement. À élucider avant le go-live prod.
 - [ ] Implémenter le pull `extranet_autologin_url` au moment des relances email *(infra existante, à brancher sur le scheduler)*
-- [ ] Traiter les bugs résiduels restants en §9 (b, d) — (a, e, f shippés en Phase 1)
+- [ ] Traiter les bugs résiduels restants en §9 (b, d) — (a, c, e, f shippés)
 - [ ] **Tester l'intégration sur la prod Dendreo** (avec un Participant + Module + ADF clairement marqués TEST), avant la bascule réelle des apprenants existants
 - [ ] Documenter la procédure de bascule sandbox → prod le jour du go-live
 - [ ] Renommer `tenant_id` `taa-formation-test` → valeur prod
@@ -266,3 +341,4 @@ Le bon modèle est documenté dans **Phase 2A bis** ci-dessous.
   - `197bc99` `fix(dendreo): cast external_id to string before Prisma upsert`
   - `2db0c6a` `chore: bump Node engine to >=22 for @supabase/realtime-js compat`
   - `ad3ef32` `fix(sso): forward internal token via query string when return_to is set`
+  - `5fcdf27` `fix(dendreo): refactor user.created handler to match by dendreoUserId first, then email with collision guard` *(Phase 2B, tag `v0.6-dendreo-user-matching`)*
