@@ -39,7 +39,10 @@ export function ResponsiveList<T>({
   return (
     <>
       {/* ─── Desktop : tableau ─────────────────────────────────── */}
-      <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+      {/* overflow-x-auto : permet le scroll horizontal quand un tableau a
+          beaucoup de colonnes (ex : formations avec 9 colonnes + 4 actions)
+          au lieu de clipper en silence le contenu. */}
+      <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50">
