@@ -2,14 +2,18 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import * as service from './videos.service';
 import { logEvent } from '../../shared/eventLog.service';
+import { logger } from '../../shared/logger';
 import { BadRequestError } from '../../shared/errors';
 import { sendProgressionToDendreo } from '../dendreo/dendreo.progression.service';
 
 // ─── Admin — Upload vidéo ─────────────────────────────────────────────────────
 
 export async function adminUpload(req: Request, res: Response) {
+  const t1 = Date.now();
   const uaId = req.params.id;
   const file = req.file;
+  // T0 posé par markUploadStart() avant multer dans videos.router.ts
+  const t0 = (req as Request & { uploadStartedAt?: number }).uploadStartedAt ?? t1;
 
   if (!file) throw new BadRequestError('Fichier vidéo manquant');
 
@@ -17,7 +21,7 @@ export async function adminUpload(req: Request, res: Response) {
     ? parseInt(req.body.durationSeconds, 10)
     : undefined;
 
-  const result = await service.uploadVideo(uaId, file, durationSeconds);
+  const { video, timings } = await service.uploadVideo(uaId, file, durationSeconds);
 
   // Log l'upload — ne PAS inclure d'URL
   await logEvent({
@@ -27,14 +31,25 @@ export async function adminUpload(req: Request, res: Response) {
     entityType: 'ua',
     entityId: uaId,
     payload: {
-      originalName: result.originalName,
-      mimeType: result.mimeType,
-      fileSizeBytes: result.fileSizeBytes,
-      durationSeconds: result.durationSeconds,
+      originalName: video.originalName,
+      mimeType: video.mimeType,
+      fileSizeBytes: video.fileSizeBytes,
+      durationSeconds: video.durationSeconds,
     },
   });
 
-  res.status(201).json({ data: result });
+  const t5 = Date.now();
+  logger.info('Video upload timing', {
+    uaId,
+    sizeBytes: file.size,
+    sizeMB: Math.round(file.size / 1024 / 1024),
+    multer_ms: t1 - t0,
+    supabase_ms: timings.supabase_ms,
+    prisma_ms: timings.prisma_ms,
+    total_ms: t5 - t0,
+  });
+
+  res.status(201).json({ data: video });
 }
 
 // ─── Player — Stream (signed URL) ────────────────────────────────────────────

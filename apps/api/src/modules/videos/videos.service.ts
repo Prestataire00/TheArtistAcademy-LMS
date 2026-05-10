@@ -5,6 +5,8 @@ import { logger } from '../../shared/logger';
 
 /**
  * Upload une vidéo vers Supabase Storage et crée/met à jour le VideoContent.
+ * Retourne aussi les `timings` (supabase_ms, prisma_ms) pour que le controller
+ * puisse logger un breakdown bout-en-bout de l'upload.
  */
 export async function uploadVideo(
   uaId: string,
@@ -23,12 +25,14 @@ export async function uploadVideo(
   const storagePath = `${uaId}/${Date.now()}.${ext}`;
 
   // Upload vers Supabase Storage (bucket privé)
+  const t2 = Date.now();
   const { error: uploadError } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(storagePath, file.buffer, {
       contentType: file.mimetype,
       upsert: false,
     });
+  const t3 = Date.now();
 
   if (uploadError) {
     throw new BadRequestError(`Erreur upload Supabase: ${uploadError.message}`);
@@ -60,15 +64,22 @@ export async function uploadVideo(
       durationSeconds: durationSeconds ?? null,
     },
   });
+  const t4 = Date.now();
 
   return {
-    id: videoContent.id,
-    uaId: videoContent.uaId,
-    originalName: videoContent.originalName,
-    mimeType: videoContent.mimeType,
-    fileSizeBytes: videoContent.fileSizeBytes,
-    durationSeconds: videoContent.durationSeconds,
-    uploadedAt: videoContent.uploadedAt.toISOString(),
+    video: {
+      id: videoContent.id,
+      uaId: videoContent.uaId,
+      originalName: videoContent.originalName,
+      mimeType: videoContent.mimeType,
+      fileSizeBytes: videoContent.fileSizeBytes,
+      durationSeconds: videoContent.durationSeconds,
+      uploadedAt: videoContent.uploadedAt.toISOString(),
+    },
+    timings: {
+      supabase_ms: t3 - t2,
+      prisma_ms: t4 - t3,
+    },
   };
 }
 
