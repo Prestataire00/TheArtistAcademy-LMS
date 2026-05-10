@@ -96,18 +96,23 @@ export default function AdminDashboard() {
               mobileLabel: 'Formation',
               label: <SortableHeader field="title" label="Formation" currentSort={t.sort} onSortChange={t.cycleSort} />,
               mobileHidden: true,
-              render: (s) => <span className="font-medium text-gray-900">{s.title}</span>,
+              width: '30%',
+              truncate: true,
+              render: (s) => <span className="font-medium text-gray-900" title={s.title}>{s.title}</span>,
             },
             {
               key: 'learners',
               mobileLabel: 'Apprenants',
-              label: <SortableHeader field="learnersCount" label="Apprenants" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              label: <SortableHeader field="learnersCount" label="Apprenants" currentSort={t.sort} onSortChange={t.cycleSort} align="center" />,
+              align: 'center',
+              width: '85px',
               render: (s) => <span className="text-gray-700">{s.learnersCount}</span>,
             },
             {
               key: 'completion',
               mobileLabel: 'Complétion',
               label: <SortableHeader field="completionRate" label="Complétion" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              width: '12%',
               render: (s) => (
                 <span className="text-gray-700 text-xs">{s.completedCount}/{s.learnersCount} ({s.completionRate}%)</span>
               ),
@@ -116,12 +121,13 @@ export default function AdminDashboard() {
               key: 'progress',
               mobileLabel: 'Progression moy.',
               label: <SortableHeader field="avgProgress" label="Progression moy." currentSort={t.sort} onSortChange={t.cycleSort} />,
+              width: '20%',
               render: (s) => (
                 <div className="flex items-center gap-2">
-                  <div className="w-24 md:w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-1.5 bg-brand-600 rounded-full" style={{ width: `${s.avgProgress}%` }} />
                   </div>
-                  <span className="text-xs text-gray-500">{s.avgProgress}%</span>
+                  <span className="text-xs text-gray-500 flex-shrink-0">{s.avgProgress}%</span>
                 </div>
               ),
             },
@@ -129,12 +135,15 @@ export default function AdminDashboard() {
               key: 'time',
               mobileLabel: 'Temps moyen',
               label: <SortableHeader field="avgTimeSpentSeconds" label="Temps moyen" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              width: '13%',
               render: (s) => <span className="text-xs text-gray-700">{formatDuration(s.avgTimeSpentSeconds)}</span>,
             },
             {
               key: 'quiz',
               mobileLabel: 'Score moy. QCM/VF',
-              label: <SortableHeader field="avgQuizScore" label="Score moy. QCM/VF" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              label: <SortableHeader field="avgQuizScore" label="Score" currentSort={t.sort} onSortChange={t.cycleSort} align="center" />,
+              align: 'center',
+              width: '70px',
               render: (s) => (
                 <span className="text-xs text-gray-700">
                   {s.avgQuizScore !== null ? `${s.avgQuizScore}%` : <span className="text-gray-300">—</span>}

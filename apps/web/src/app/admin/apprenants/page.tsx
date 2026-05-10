@@ -237,24 +237,29 @@ export default function AdminApprenantsPage() {
                 mobileLabel: 'Apprenant',
                 label: <SortableHeader field="fullName" label="Apprenant" currentSort={t.sort} onSortChange={t.cycleSort} />,
                 mobileHidden: true,
+                width: '18%',
                 render: (a) => (
-                  <>
-                    <p className="font-medium text-gray-900">{a.fullName}</p>
-                    <p className="text-xs text-gray-400">{a.email}</p>
-                  </>
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 truncate" title={a.fullName}>{a.fullName}</p>
+                    <p className="text-xs text-gray-400 truncate" title={a.email}>{a.email}</p>
+                  </div>
                 ),
               },
               {
                 key: 'formation',
                 mobileLabel: 'Formation',
                 label: <SortableHeader field="formationTitle" label="Formation" currentSort={t.sort} onSortChange={t.cycleSort} />,
-                render: (a) => <span className="text-xs text-gray-600 break-words">{a.formationTitle}</span>,
+                width: '24%',
+                truncate: true,
+                render: (a) => <span className="text-xs text-gray-600" title={a.formationTitle}>{a.formationTitle}</span>,
               },
               {
                 key: 'status',
                 mobileLabel: 'Statut',
-                label: <SortableHeader field="status" label="Statut" currentSort={t.sort} onSortChange={t.cycleSort} />,
+                label: <SortableHeader field="status" label="Statut" currentSort={t.sort} onSortChange={t.cycleSort} align="center" />,
                 mobileHidden: true,
+                align: 'center',
+                width: '95px',
                 render: (a) => (
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyles[a.status] || statusStyles.not_started}`}>
                     {statusLabels[a.status] || a.status}
@@ -265,19 +270,21 @@ export default function AdminApprenantsPage() {
                 key: 'progress',
                 mobileLabel: 'Progression',
                 label: <SortableHeader field="progressPercent" label="Progression" currentSort={t.sort} onSortChange={t.cycleSort} />,
+                width: '20%',
                 render: (a) => (
                   <div className="flex items-center gap-2">
-                    <div className="w-24 md:w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-1.5 bg-brand-600 rounded-full" style={{ width: `${a.progressPercent}%` }} />
                     </div>
-                    <span className="text-xs text-gray-500">{a.progressPercent}%</span>
+                    <span className="text-xs text-gray-500 flex-shrink-0">{a.progressPercent}%</span>
                   </div>
                 ),
               },
               {
                 key: 'activity',
                 mobileLabel: 'Dernière activité',
-                label: <SortableHeader field="lastActivity" label="Dernière activité" currentSort={t.sort} onSortChange={t.cycleSort} />,
+                label: <SortableHeader field="lastActivity" label="Activité" currentSort={t.sort} onSortChange={t.cycleSort} />,
+                width: '14%',
                 render: (a) => <span className="text-xs text-gray-500">{timeAgo(a.lastActivity)}</span>,
               },
             ]}

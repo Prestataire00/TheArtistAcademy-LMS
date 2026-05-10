@@ -156,7 +156,7 @@ export default function AdminUtilisateursPage() {
 
   function formatDate(iso: string | null) {
     if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   }
 
   if (loading && users.length === 0) {
@@ -285,6 +285,8 @@ export default function AdminUtilisateursPage() {
               mobileLabel: 'Nom',
               label: <SortableHeader field="fullName" label="Nom" currentSort={t.sort} onSortChange={t.cycleSort} />,
               mobileHidden: true,
+              width: '18%',
+              truncate: true,
               render: (u) => (
                 editingName === u.id ? (
                   <input
@@ -299,6 +301,7 @@ export default function AdminUtilisateursPage() {
                   <span
                     onClick={() => { setEditingName(u.id); setEditingNameValue(u.fullName); }}
                     className="cursor-pointer hover:underline hover:text-brand-700 transition-colors font-medium text-gray-900"
+                    title={u.fullName}
                   >{u.fullName}</span>
                 )
               ),
@@ -308,12 +311,15 @@ export default function AdminUtilisateursPage() {
               mobileLabel: 'Email',
               label: <SortableHeader field="email" label="Email" currentSort={t.sort} onSortChange={t.cycleSort} />,
               mobileHidden: true,
-              render: (u) => <span className="text-gray-500">{u.email}</span>,
+              width: '20%',
+              truncate: true,
+              render: (u) => <span className="text-gray-500" title={u.email}>{u.email}</span>,
             },
             {
               key: 'role',
               mobileLabel: 'Rôle',
               label: <SortableHeader field="role" label="Rôle" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              width: '14%',
               render: (u) => (
                 <select
                   value={u.role}
@@ -329,21 +335,30 @@ export default function AdminUtilisateursPage() {
             {
               key: 'created',
               mobileLabel: 'Créé le',
-              label: <SortableHeader field="createdAt" label="Créé le" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              label: <SortableHeader field="createdAt" label="Créé" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              width: '90px',
               render: (u) => <span className="text-gray-500 text-xs">{formatDate(u.createdAt)}</span>,
             },
             {
               key: 'lastSeen',
               mobileLabel: 'Dernière connexion',
-              label: <SortableHeader field="lastSeenAt" label="Dernière connexion" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              label: <SortableHeader field="lastSeenAt" label="Connexion" currentSort={t.sort} onSortChange={t.cycleSort} />,
+              width: '90px',
               render: (u) => <span className="text-gray-500 text-xs">{formatDate(u.lastSeenAt)}</span>,
             },
             {
               key: 'actions', label: 'Actions', align: 'right', mobileHidden: true,
+              width: '210px',
               render: (u) => (
                 <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                  <button onClick={() => handleResetPassword(u)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">Réinit. mdp</button>
-                  <button onClick={() => handleDelete(u)} className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors">Supprimer</button>
+                  <button onClick={() => handleResetPassword(u)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors">
+                    Réinit. mdp
+                  </button>
+                  <button onClick={() => handleDelete(u)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Supprimer">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
                 </div>
               ),
             },

@@ -10,6 +10,14 @@ export type Column<T> = {
   render: (item: T) => ReactNode;
   mobileHidden?: boolean;
   align?: 'left' | 'center' | 'right';
+  /** Largeur de la colonne en desktop (utilisée par `<colgroup>` sous `table-fixed`).
+   *  Ex : '160px', '24%', '90px'. Sans valeur : largeur égale par défaut. */
+  width?: string;
+  /** Si true, applique `truncate` à la cellule (single-line + ellipsis).
+   *  Pour des cellules multi-lignes (titre+sous-titre), laisser à false et
+   *  gérer le truncate via un wrapper `<div className="min-w-0">` à l'intérieur
+   *  de `render`. */
+  truncate?: boolean;
 };
 
 export type ResponsiveListProps<T> = {
@@ -39,17 +47,24 @@ export function ResponsiveList<T>({
   return (
     <>
       {/* ─── Desktop : tableau ─────────────────────────────────── */}
-      {/* overflow-x-auto : permet le scroll horizontal quand un tableau a
-          beaucoup de colonnes (ex : formations avec 9 colonnes + 4 actions)
-          au lieu de clipper en silence le contenu. */}
-      <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="w-full text-sm">
+      {/* table-fixed + <colgroup> : les colonnes ont des largeurs prévisibles
+          et déterministes, indispensable pour que `truncate` fonctionne et
+          pour éviter le scroll horizontal sur les tableaux à 6+ colonnes.
+          overflow-hidden : remplace l'ancien overflow-x-auto ; le débordement
+          intra-cellule est géré par `truncate` (ou un wrapper interne). */}
+      <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="w-full text-sm table-fixed">
+          <colgroup>
+            {columns.map((c) => (
+              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+            ))}
+          </colgroup>
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50">
               {columns.map((c) => (
                 <th
                   key={c.key}
-                  className={`px-4 py-3 font-medium text-gray-500 ${alignClass(c.align)}`}
+                  className={`px-3 py-3 font-medium text-gray-500 ${alignClass(c.align)}`}
                 >
                   {c.label}
                 </th>
@@ -65,7 +80,10 @@ export function ResponsiveList<T>({
                   className={`hover:bg-gray-50 ${cls}`}
                 >
                   {columns.map((c) => (
-                    <td key={c.key} className={`px-4 py-3 ${alignClass(c.align)}`}>
+                    <td
+                      key={c.key}
+                      className={`px-3 py-3 ${alignClass(c.align)} ${c.truncate ? 'truncate' : 'break-words'}`}
+                    >
                       {c.render(item)}
                     </td>
                   ))}
