@@ -12,6 +12,9 @@ export const adminQuizzesRouter = Router();
 // pour les trainers (admins/superadmins passent sans restriction).
 adminQuizzesRouter.use(authenticate, requireRole('trainer', 'admin', 'superadmin'));
 
+// GET /api/v1/admin/uas/:id/quiz — Charger le quiz d'une UA (avec isCorrect)
+adminQuizzesRouter.get('/uas/:id/quiz', verifyTrainerOwnership(), asyncHandler(ctrl.adminGetQuiz));
+
 // PUT /api/v1/admin/uas/:id/quiz — Créer ou remplacer le quiz d'une UA
 adminQuizzesRouter.put('/uas/:id/quiz', verifyTrainerOwnership(), asyncHandler(ctrl.adminUpsertQuiz));
 

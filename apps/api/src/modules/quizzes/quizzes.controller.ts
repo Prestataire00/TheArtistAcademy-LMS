@@ -58,6 +58,12 @@ const submitSchema = z.object({
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
+export async function adminGetQuiz(req: Request, res: Response) {
+  const uaId = req.params.id;
+  const quiz = await service.getQuizAdmin(uaId);
+  res.json({ data: quiz });
+}
+
 export async function adminUpsertQuiz(req: Request, res: Response) {
   const uaId = req.params.id;
   const parsed = upsertQuizSchema.safeParse(req.body);
