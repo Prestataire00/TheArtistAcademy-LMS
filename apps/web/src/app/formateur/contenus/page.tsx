@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { api } from '@/lib/api';
+import { api, uploadFile } from '@/lib/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -145,15 +145,7 @@ export default function FormateurContenusPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`/api/v1/formateur/contenus/uas/${uaId}/resource`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error?.message || `HTTP ${res.status}`);
-      }
+      await uploadFile(`/formateur/contenus/uas/${uaId}/resource`, formData);
       setMessage({ type: 'success', text: 'Ressource uploadee' });
       loadData();
     } catch (err: unknown) {

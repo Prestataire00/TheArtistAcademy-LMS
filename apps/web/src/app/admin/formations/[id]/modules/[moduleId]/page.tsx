@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, uploadFile } from '@/lib/api';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -128,9 +128,8 @@ export default function AdminModuleDetailPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const endpoint = type === 'video' ? `/api/v1/admin/uas/${uaId}/video` : `/api/v1/admin/uas/${uaId}/resource`;
-      const res = await fetch(endpoint, { method: 'POST', credentials: 'include', body: formData });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.error?.message || `HTTP ${res.status}`); }
+      const path = type === 'video' ? `/admin/uas/${uaId}/video` : `/admin/uas/${uaId}/resource`;
+      await uploadFile(path, formData);
       showToast(type === 'video' ? 'Vidéo uploadée' : 'Ressource uploadée', 'success');
       loadData();
     } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Erreur upload', 'error'); }
