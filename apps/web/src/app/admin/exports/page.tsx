@@ -14,6 +14,8 @@ export default function AdminExportsPage() {
   const [learnersFilters, setLearnersFilters] = useState({ formationId: '', from: '', to: '' });
   const [modulesFilters, setModulesFilters] = useState({ formationId: '' });
   const [logsFilters, setLogsFilters] = useState({ from: '', to: '' });
+  const [financierFilters, setFinancierFilters] = useState({ formationId: '', dateFrom: '', dateTo: '' });
+  const [progressionDetailleeFilters, setProgressionDetailleeFilters] = useState({ formationId: '' });
 
   useEffect(() => {
     api.get<{ data: { formations: Formation[] } }>('/admin/dashboard/sessions')
@@ -101,6 +103,48 @@ export default function AdminExportsPage() {
               value={modulesFilters.formationId}
               formations={formations}
               onChange={(v) => setModulesFilters({ formationId: v })}
+            />
+          </FiltersRow>
+        </ExportCard>
+
+        {/* Financeur (CPF/OPCO) */}
+        <ExportCard
+          title="Export Financeur (CPF/OPCO)"
+          desc="Une ligne par UA par apprenant : identite, IP/pays, dates, temps ecoule, progres"
+          downloading={downloading === 'financeur'}
+          onDownload={() => handleDownload('financeur', buildQs(financierFilters))}
+        >
+          <FiltersRow>
+            <FormationSelect
+              value={financierFilters.formationId}
+              formations={formations}
+              onChange={(v) => setFinancierFilters({ ...financierFilters, formationId: v })}
+            />
+            <DateInput
+              label="Du"
+              value={financierFilters.dateFrom}
+              onChange={(v) => setFinancierFilters({ ...financierFilters, dateFrom: v })}
+            />
+            <DateInput
+              label="Au"
+              value={financierFilters.dateTo}
+              onChange={(v) => setFinancierFilters({ ...financierFilters, dateTo: v })}
+            />
+          </FiltersRow>
+        </ExportCard>
+
+        {/* Progression detaillee par apprenant */}
+        <ExportCard
+          title="Export Progression détaillée par apprenant"
+          desc="Une ligne par UA par apprenant : module + UA (statut, progression, temps, dates) sur chaque ligne"
+          downloading={downloading === 'progression-detaillee'}
+          onDownload={() => handleDownload('progression-detaillee', buildQs(progressionDetailleeFilters))}
+        >
+          <FiltersRow>
+            <FormationSelect
+              value={progressionDetailleeFilters.formationId}
+              formations={formations}
+              onChange={(v) => setProgressionDetailleeFilters({ ...progressionDetailleeFilters, formationId: v })}
             />
           </FiltersRow>
         </ExportCard>
@@ -229,3 +273,4 @@ function DateInput({
     </label>
   );
 }
+

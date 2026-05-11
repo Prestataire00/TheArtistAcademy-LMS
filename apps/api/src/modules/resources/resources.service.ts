@@ -3,6 +3,7 @@ import { prisma } from '../../config/database';
 import { supabase, RESOURCES_BUCKET } from '../../config/supabase';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
 import { computePathwayLocks } from '../../shared/pathway';
+import { lookupCountry } from '../../shared/geo';
 
 const ALLOWED_MIMES = new Set([
   'application/pdf',
@@ -217,17 +218,34 @@ export async function generatePreviewUrlByResourceId(
   };
 }
 
-export async function markResourceCompleted(enrollmentId: string, uaId: string) {
+export async function markResourceCompleted(
+  enrollmentId: string,
+  uaId: string,
+  meta?: { ipAddress?: string | null },
+) {
   const now = new Date();
+
+  // Phase 2 — capture IP + pays UNIQUEMENT au PREMIER passage à `completed`
+  // (jamais écrasés ensuite). Quand Phase 1 implémentera la transition
+  // not_started → in_progress, étendre ici pour capturer aussi à ce moment-là.
+  const existing = await prisma.uAProgress.findUnique({
+    where: { enrollmentId_uaId: { enrollmentId, uaId } },
+    select: { ipAddress: true },
+  });
+  const captureGeo = !existing?.ipAddress && meta?.ipAddress
+    ? { ipAddress: meta.ipAddress, country: lookupCountry(meta.ipAddress) }
+    : {};
+
   await prisma.uAProgress.upsert({
     where: { enrollmentId_uaId: { enrollmentId, uaId } },
-    update: { status: 'completed', completedAt: now },
+    update: { status: 'completed', completedAt: now, ...captureGeo },
     create: {
       enrollmentId,
       uaId,
       status: 'completed',
       firstAccessedAt: now,
       completedAt: now,
+      ...captureGeo,
     },
   });
 }

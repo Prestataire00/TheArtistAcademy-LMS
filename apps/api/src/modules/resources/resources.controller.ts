@@ -77,7 +77,7 @@ export async function playerPreview(req: Request, res: Response) {
 
   // L'aperçu inline compte comme une consultation → on marque l'UA completed
   // (cohérent avec le download : "ouverture = complétion").
-  await service.markResourceCompleted(enrollment.id, resource.uaId);
+  await service.markResourceCompleted(enrollment.id, resource.uaId, { ipAddress: req.ip ?? null });
 
   await logEvent({
     category: 'navigation',
@@ -102,7 +102,7 @@ export async function playerDownload(req: Request, res: Response) {
   const { enrollment } = await verifyLearnerAccess(userId, resource.uaId);
 
   // Marquer l'UA comme completed (ouverture = complétion pour une ressource)
-  await service.markResourceCompleted(enrollment.id, resource.uaId);
+  await service.markResourceCompleted(enrollment.id, resource.uaId, { ipAddress: req.ip ?? null });
 
   // Log — sans l'URL signée
   await logEvent({

@@ -2,6 +2,7 @@ import { prisma } from '../../config/database';
 import { supabase, STORAGE_BUCKET, SIGNED_URL_EXPIRES_IN } from '../../config/supabase';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
 import { logger } from '../../shared/logger';
+import { lookupCountry } from '../../shared/geo';
 
 /**
  * Upload une vidéo vers Supabase Storage et crée/met à jour le VideoContent.
@@ -114,6 +115,7 @@ export async function saveVideoProgress(
   positionSeconds: number,
   percentWatched: number,
   completionThreshold: number,
+  meta?: { ipAddress?: string | null },
 ) {
   const now = new Date();
   const isCompleted = percentWatched >= completionThreshold;
@@ -133,6 +135,15 @@ export async function saveVideoProgress(
   });
   const alreadyCompleted = existing?.status === 'completed';
 
+  // Phase 2 — capture IP + pays UNIQUEMENT à la transition vers `completed`
+  // (jamais à in_progress, jamais écrasés ensuite). Quand Phase 1 décidera
+  // de capturer dès le premier heartbeat (transition vers in_progress),
+  // étendre la condition ci-dessous.
+  const isFirstCompletion = isCompleted && !alreadyCompleted && !existing?.ipAddress && !!meta?.ipAddress;
+  const captureGeo = isFirstCompletion
+    ? { ipAddress: meta!.ipAddress!, country: lookupCountry(meta!.ipAddress!) }
+    : {};
+
   const progress = await prisma.uAProgress.upsert({
     where: { enrollmentId_uaId: { enrollmentId, uaId } },
     update: {
@@ -141,6 +152,7 @@ export async function saveVideoProgress(
       status: alreadyCompleted ? 'completed' : (isCompleted ? 'completed' : 'in_progress'),
       completedAt: (alreadyCompleted || isCompleted) ? (existing?.completedAt ?? now) : undefined,
       timeSpentSeconds: { increment: 10 }, // heartbeat interval = 10s
+      ...captureGeo,
     },
     create: {
       enrollmentId,
@@ -151,6 +163,10 @@ export async function saveVideoProgress(
       firstAccessedAt: now,
       completedAt: isCompleted ? now : null,
       timeSpentSeconds: 10,
+      // Si la création se fait directement avec isCompleted=true, on capture aussi
+      ...(isCompleted && meta?.ipAddress
+        ? { ipAddress: meta.ipAddress, country: lookupCountry(meta.ipAddress) }
+        : {}),
     },
   });
 

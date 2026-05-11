@@ -321,6 +321,10 @@ model UAProgress {
   timeSpentSeconds     Int              @default(0) @map("time_spent_seconds")
   firstAccessedAt      DateTime?        @map("first_accessed_at")
   completedAt          DateTime?        @map("completed_at")
+  // Capturés UNIQUEMENT au PREMIER passage à `completed` (jamais écrasés ensuite).
+  // Conservés pour conformité Qualiopi/CPF — cf. PRD section 8.
+  ipAddress            String?          @map("ip_address")
+  country              String?          @map("country") // ISO 3166-1 alpha-2 via geoip-lite
   updatedAt            DateTime         @updatedAt @map("updated_at")
 
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)

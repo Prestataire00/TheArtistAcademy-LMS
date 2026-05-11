@@ -1,6 +1,7 @@
 import { QuestionType } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
+import { lookupCountry } from '../../shared/geo';
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,7 @@ export async function submitQuizAttempt(
   enrollmentId: string,
   uaId: string,
   answers: AnswerInput[],
+  meta?: { ipAddress?: string | null },
 ) {
   const quiz = await prisma.quiz.findUnique({
     where: { uaId },
@@ -225,15 +227,28 @@ export async function submitQuizAttempt(
 
   // Marquer l'UA comme completed (quiz = soumission suffit)
   const now = new Date();
+
+  // Phase 2 — capture IP + pays UNIQUEMENT au PREMIER passage à `completed`
+  // (jamais écrasés ensuite). Quand Phase 1 implémentera la transition
+  // not_started → in_progress, étendre ici pour capturer aussi à ce moment-là.
+  const existing = await prisma.uAProgress.findUnique({
+    where: { enrollmentId_uaId: { enrollmentId, uaId } },
+    select: { ipAddress: true },
+  });
+  const captureGeo = !existing?.ipAddress && meta?.ipAddress
+    ? { ipAddress: meta.ipAddress, country: lookupCountry(meta.ipAddress) }
+    : {};
+
   await prisma.uAProgress.upsert({
     where: { enrollmentId_uaId: { enrollmentId, uaId } },
-    update: { status: 'completed', completedAt: now },
+    update: { status: 'completed', completedAt: now, ...captureGeo },
     create: {
       enrollmentId,
       uaId,
       status: 'completed',
       firstAccessedAt: now,
       completedAt: now,
+      ...captureGeo,
     },
   });
 

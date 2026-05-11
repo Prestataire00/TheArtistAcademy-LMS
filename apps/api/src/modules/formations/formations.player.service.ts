@@ -3,6 +3,7 @@ import { NotFoundError, BadRequestError } from '../../shared/errors';
 import { CompletionStatus, UserRole } from '@prisma/client';
 import { logger } from '../../shared/logger';
 import { computePathwayLocks } from '../../shared/pathway';
+import { computeModuleProgress } from '../../shared/moduleProgress';
 
 const STAFF_ROLES: UserRole[] = ['admin', 'superadmin', 'trainer'];
 
@@ -84,6 +85,7 @@ export async function getPlayerFormation(
   }
 
   // Charger la formation complète
+  // `videoContent.durationSeconds` requis pour la pondération de la progression module (PRD §3.4)
   const formation = await prisma.formation.findUnique({
     where: { id: formationId },
     include: {
@@ -94,6 +96,9 @@ export async function getPlayerFormation(
           uas: {
             where: { isPublished: true },
             orderBy: { position: 'asc' },
+            include: {
+              videoContent: { select: { durationSeconds: true } },
+            },
           },
         },
       },
@@ -130,19 +135,15 @@ export async function getPlayerFormation(
   let firstIncompleteUaId: string | null = null;
 
   const modules = formation.modules.map((mod) => {
-    let moduleCompleted = 0;
-    let moduleTotal = 0;
+    const uaInputs: Array<{ status: CompletionStatus; type: typeof mod.uas[number]['type']; videoDurationSeconds?: number | null }> = [];
 
     const uas = mod.uas.map((ua) => {
-      moduleTotal++;
       totalUAs++;
       const progress = uaProgressMap.get(ua.id);
       const status: CompletionStatus = progress?.status ?? 'not_started';
+      uaInputs.push({ status, type: ua.type, videoDurationSeconds: ua.videoContent?.durationSeconds });
 
-      if (status === 'completed') {
-        moduleCompleted++;
-        completedUAs++;
-      }
+      if (status === 'completed') completedUAs++;
 
       const uaLocked = uaLocks.get(ua.id) ?? false;
       // Continuer = première UA non terminée ET non verrouillée
@@ -150,9 +151,7 @@ export async function getPlayerFormation(
         firstIncompleteUaId = ua.id;
       }
 
-      if (progress) {
-        totalTimeSpent += progress.timeSpentSeconds;
-      }
+      if (progress) totalTimeSpent += progress.timeSpentSeconds;
 
       return {
         id: ua.id,
@@ -164,11 +163,7 @@ export async function getPlayerFormation(
       };
     });
 
-    const moduleProgressPercent = moduleTotal > 0 ? Math.round((moduleCompleted / moduleTotal) * 100) : 0;
-    const moduleStatus: CompletionStatus =
-      moduleCompleted === 0 ? 'not_started' :
-      moduleCompleted >= moduleTotal ? 'completed' :
-      'in_progress';
+    const { status: moduleStatus, progressPercent: moduleProgressPercent } = computeModuleProgress(uaInputs);
 
     return {
       id: mod.id,

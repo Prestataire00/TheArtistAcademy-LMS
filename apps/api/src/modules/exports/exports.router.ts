@@ -62,3 +62,28 @@ exportsRouter.get('/relances', asyncHandler(async (req: Request, res: Response) 
   await logExport(req, 'export_relances', {});
   sendCsv(res, csv, 'relances');
 }));
+
+// GET /api/v1/admin/exports/financeur
+// Export CPF/OPCO : 1 ligne par UA par apprenant — filtres formationId, sessionId, dateFrom, dateTo.
+exportsRouter.get('/financeur', asyncHandler(async (req: Request, res: Response) => {
+  const { formationId, sessionId, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+  const csv = await service.exportFinancier({ formationId, sessionId, dateFrom, dateTo });
+  await logExport(req, 'export_financeur', { formationId, sessionId, dateFrom, dateTo });
+  sendCsv(res, csv, 'financeur');
+}));
+
+// GET /api/v1/admin/exports/progression-detaillee
+// Une ligne par UA par apprenant (les infos du module sont répétées sur chaque ligne UA).
+// Filtres formationId, sessionId. Filename: progression-detaillee-AAAAMMJJ.csv (sans heure).
+exportsRouter.get('/progression-detaillee', asyncHandler(async (req: Request, res: Response) => {
+  const { formationId, sessionId } = req.query as Record<string, string | undefined>;
+  const csv = await service.exportProgressionDetaillee({ formationId, sessionId });
+  await logExport(req, 'export_progression_detaillee', { formationId, sessionId });
+
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const filename = `progression-detaillee-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.csv`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
+}));

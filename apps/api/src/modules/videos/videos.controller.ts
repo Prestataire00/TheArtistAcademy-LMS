@@ -99,6 +99,7 @@ export async function playerSaveProgress(req: Request, res: Response) {
     parsed.data.positionSeconds,
     parsed.data.percentWatched,
     formation.videoCompletionThreshold,
+    { ipAddress: req.ip ?? null },
   );
 
   // Log seulement les changements de statut significatifs

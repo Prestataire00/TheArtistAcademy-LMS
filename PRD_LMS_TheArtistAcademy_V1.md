@@ -5,9 +5,9 @@
 LMS Custom --- Remplacement Dokeos
 
   ---------------------------- ------------------------------------------
-  **Version**                  V1.2
+  **Version**                  V1.3
 
-  **Date**                     2 mai 2026
+  **Date**                     12 mai 2026
 
   **Statut**                   Draft --- Pour revue
 
@@ -558,7 +558,35 @@ identifiant apprenant :
 
   Admin               Exports, paramétrages sensibles admin_id, action,
                                                       timestamp
+
+  Conformité          Adresse IP + pays capturés à la user_id, ua_id,
+                      première ouverture de chaque UA ip_address,
+                      pour conformité Qualiopi/CPF    country, timestamp
   -----------------------------------------------------------------------
+
+**8.1 Conformité RGPD --- IP & pays**
+
+L\'adresse IP et le code pays (ISO 3166-1 alpha-2) sont stockés sur la
+table `ua_progresses` (colonnes `ip_address`, `country`). Le pays est
+résolu côté serveur via la base GeoLite2 embarquée (pas d\'appel
+externe). Ces données sont capturées une seule fois et ne sont jamais
+écrasées.
+
+-   **Finalité** : preuve de connexion exigée par les financeurs CPF /
+    OPCO et conformité Qualiopi (indicateur 22).
+
+-   **Base légale** : obligation contractuelle vis-à-vis du financeur
+    + intérêt légitime (preuve d\'exécution de la prestation).
+
+-   **Durée de conservation** : à valider avec l\'OF. Recommandé
+    **3 ans après la fin de formation** conformément aux obligations
+    comptables (art. L123-22 Code de commerce) et aux exigences de
+    contrôle des financeurs.
+
+-   **Implémentation V1** : capture au premier passage de l\'UA à
+    `completed` (point d\'écriture toujours présent). L\'extension au
+    premier accès `in_progress` est prévue avec le déploiement complet
+    de la Phase 1 (heartbeat vidéo / ouverture ressource).
 
 **9. Reporting & Exports**
 
@@ -834,6 +862,16 @@ Des tableaux de bord simples sont disponibles pour Admin et Formateur
                                (paramétrage simultané modules + UAs),
                                §12.1 (critère d\'acceptance 403 sur UA
                                non précédée d\'une UA terminée)
+
+  V1.3          12 mai 2026    Ajout §8.1 (Conformité RGPD --- IP &
+                               pays) : capture `ip_address` + `country`
+                               sur `ua_progresses`, finalité
+                               Qualiopi/CPF, durée de conservation
+                               recommandée 3 ans. Catégorie
+                               « Conformité » ajoutée à la table §8.
+                               Préparation des 2 nouveaux exports
+                               admin (Financeur CPF/OPCO,
+                               Progression par module --- cf. §9.3).
   -----------------------------------------------------------------------
 
 **Historique des versions**
@@ -847,4 +885,10 @@ Des tableaux de bord simples sont disponibles pour Admin et Formateur
     UAs (déverrouillage UA par UA au sein de chaque module en plus du
     déverrouillage module par module)
 
-*--- Fin du document PRD LMS --- The Artist Academy V1.2 ---*
+-   V1.3 --- 12 mai 2026 --- Ajout §8.1 « Conformité RGPD --- IP &
+    pays » (capture `ip_address` + `country` sur `ua_progresses`,
+    durée de conservation recommandée 3 ans après fin de formation).
+    Préparation des 2 nouveaux exports admin (Financeur CPF/OPCO,
+    Progression par module).
+
+*--- Fin du document PRD LMS --- The Artist Academy V1.3 ---*

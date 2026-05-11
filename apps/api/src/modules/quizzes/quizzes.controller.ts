@@ -110,6 +110,7 @@ export async function playerSubmit(req: Request, res: Response) {
     enrollment.id,
     uaId,
     parsed.data.answers,
+    { ipAddress: req.ip ?? null },
   );
 
   await logEvent({

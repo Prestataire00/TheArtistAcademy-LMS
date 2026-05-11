@@ -1,5 +1,8 @@
 import { stringify } from 'csv-stringify/sync';
+import type { CompletionStatus } from '@prisma/client';
 import { prisma } from '../../config/database';
+import { formatDate, formatDuration, formatPercent, percentInt } from './exports.formatters';
+import { computeModuleProgress } from '../../shared/moduleProgress';
 
 interface PeriodFilter {
   formationId?: string;
@@ -20,14 +23,6 @@ function statusLabel(done: number, total: number): string {
   if (done >= total) return 'Termine';
   if (done === 0) return 'Non demarre';
   return 'En cours';
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds < 60) return '< 1 min';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return minutes > 0 ? `${hours}h ${minutes}min` : `${hours}h`;
 }
 
 /**
@@ -81,18 +76,18 @@ export async function exportLearners(formationId?: string, from?: string, to?: s
 
     const lastActTs = progs.length > 0 ? Math.max(...progs.map((p) => p.updatedAt.getTime())) : 0;
     const lastActDate = lastActTs > 0 ? new Date(lastActTs) : null;
-    const lastActFiltered = lastActDate && inPeriod(lastActDate) ? lastActDate.toISOString() : '';
+    const lastActFiltered = lastActDate && inPeriod(lastActDate) ? lastActDate : null;
 
     return {
       Nom: e.user.fullName,
       Email: e.user.email,
       Formation: e.formation.title,
       Statut: statusLabel(done, totalUAs),
-      'Progression (%)': totalUAs > 0 ? Math.round((done / totalUAs) * 100) : 0,
+      'Progression (%)': formatPercent(totalUAs > 0 ? done / totalUAs : null),
       'Temps passe': formatDuration(time),
       'Nb tentatives quiz': attempts.length,
-      'Score moyen (%)': avgScore !== null ? Math.round(avgScore * 10) / 10 : '',
-      'Derniere activite': lastActFiltered,
+      'Score moyen (%)': formatPercent(avgScore !== null ? avgScore / 100 : null),
+      'Derniere activite': formatDate(lastActFiltered),
     };
   });
 
@@ -147,9 +142,9 @@ export async function exportModules(formationId?: string) {
       Titre: m.title,
       'Position': m.position + 1,
       'Nb apprenants': moduleLearners,
-      'Taux completion (%)': totalEnr > 0 ? Math.round((moduleDone / totalEnr) * 100) : 0,
+      'Taux completion (%)': formatPercent(totalEnr > 0 ? moduleDone / totalEnr : null),
       'Temps moyen': formatDuration(moduleAvgTime),
-      'Score moyen (%)': moduleAvgScore !== null ? Math.round(moduleAvgScore * 10) / 10 : '',
+      'Score moyen (%)': formatPercent(moduleAvgScore !== null ? moduleAvgScore / 100 : null),
     });
 
     // Agrégat par UA
@@ -167,9 +162,9 @@ export async function exportModules(formationId?: string) {
         Titre: `  ${m.title} › ${ua.title}`,
         'Position': ua.position + 1,
         'Nb apprenants': learners,
-        'Taux completion (%)': totalEnr > 0 ? Math.round((doneUA / totalEnr) * 100) : 0,
+        'Taux completion (%)': formatPercent(totalEnr > 0 ? doneUA / totalEnr : null),
         'Temps moyen': formatDuration(avgTime),
-        'Score moyen (%)': uaAvgScore !== null ? Math.round(uaAvgScore * 10) / 10 : '',
+        'Score moyen (%)': formatPercent(uaAvgScore !== null ? uaAvgScore / 100 : null),
       });
     }
   }
@@ -196,7 +191,7 @@ export async function exportLogs(from?: string, to?: string) {
   });
 
   const rows = logs.map((l) => ({
-    Date: l.createdAt.toISOString(),
+    Date: formatDate(l.createdAt),
     Categorie: l.category,
     Action: l.action,
     Utilisateur: l.user?.fullName ?? '',
@@ -224,7 +219,7 @@ export async function exportReminders() {
   });
 
   const rows = logs.map((l) => ({
-    Date: l.sentAt.toISOString(),
+    Date: formatDate(l.sentAt),
     Formation: l.enrollment.formation.title,
     Regle: `${l.rule.name} (${l.rule.delayDays}j)`,
     Destinataire: l.user.fullName,
@@ -233,6 +228,266 @@ export async function exportReminders() {
     Statut: l.status,
     Erreur: l.errorMessage ?? '',
   }));
+
+  return stringify(rows, { header: true, bom: true });
+}
+
+// ─── Helpers internes pour les nouveaux exports (financeur + progression-modules) ──
+
+function moduleStatusLabelFr(status: CompletionStatus): string {
+  if (status === 'not_started') return 'Non démarré';
+  if (status === 'completed') return 'Terminé';
+  return 'En cours';
+}
+
+/** Libellé FR du statut UA (libellés identiques à ceux du module). */
+function uaStatusLabelFr(status: CompletionStatus): string {
+  return moduleStatusLabelFr(status);
+}
+
+/** Libellé FR du type UA pour les exports. */
+function uaTypeLabelFr(type: 'video' | 'quiz' | 'resource'): string {
+  if (type === 'video') return 'Video';
+  if (type === 'quiz') return 'Quiz';
+  return 'Ressource';
+}
+
+function minDateOrNull(dates: Array<Date | null | undefined>): Date | null {
+  const valid = dates.filter((d): d is Date => !!d);
+  if (valid.length === 0) return null;
+  return new Date(Math.min(...valid.map((d) => d.getTime())));
+}
+
+function maxDateOrNull(dates: Array<Date | null | undefined>): Date | null {
+  const valid = dates.filter((d): d is Date => !!d);
+  if (valid.length === 0) return null;
+  return new Date(Math.max(...valid.map((d) => d.getTime())));
+}
+
+/** Sépare "Eva Randrianasolo" en { firstName: "Eva", lastName: "Randrianasolo" }. */
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = (fullName ?? '').trim();
+  if (!trimmed) return { firstName: '', lastName: '' };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
+/**
+ * Progression d'une UA pour un apprenant, sous forme décimale 0-1 prête pour `formatPercent`.
+ * - Vidéo : `videoPercentWatched` (stocké en 0-100) ÷ 100.
+ * - Quiz / ressource : 1 si `completed`, 0 sinon (pas de notion de % partiel).
+ */
+function uaProgressDecimal(
+  uaType: 'video' | 'quiz' | 'resource',
+  p: { status: string; videoPercentWatched: number },
+): number {
+  if (uaType === 'video') return (p.videoPercentWatched ?? 0) / 100;
+  return p.status === 'completed' ? 1 : 0;
+}
+
+/**
+ * Export CSV Financeur (CPF/OPCO) — une ligne par UA par apprenant.
+ *
+ * Filtres optionnels (tous combinables) :
+ *  - `formationId` : filtre sur `Enrollment.formationId`
+ *  - `sessionId`   : filtre sur `Enrollment.dendreoSessionId`
+ *  - `dateFrom` / `dateTo` : bornes sur `UAProgress.firstAccessedAt` (= Date de connexion)
+ *
+ * Inclusions :
+ *  - `Enrollment.status = 'active'` (consigne : "enrollment actif")
+ *  - `UAProgress.status != 'not_started'` (pertinence financeur : complétion / progression réelle)
+ */
+export async function exportFinancier(opts: {
+  formationId?: string;
+  sessionId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const firstAccessedAt: { gte?: Date; lte?: Date } = {};
+  if (opts.dateFrom) firstAccessedAt.gte = new Date(opts.dateFrom);
+  if (opts.dateTo) firstAccessedAt.lte = new Date(opts.dateTo);
+
+  const progresses = await prisma.uAProgress.findMany({
+    where: {
+      status: { not: 'not_started' },
+      enrollment: {
+        status: 'active',
+        ...(opts.formationId ? { formationId: opts.formationId } : {}),
+        ...(opts.sessionId ? { dendreoSessionId: opts.sessionId } : {}),
+      },
+      ...(opts.dateFrom || opts.dateTo ? { firstAccessedAt } : {}),
+    },
+    include: {
+      enrollment: {
+        include: {
+          user: { select: { fullName: true, email: true } },
+          formation: { select: { title: true } },
+        },
+      },
+      ua: {
+        include: {
+          module: { select: { title: true, position: true } },
+        },
+      },
+    },
+  });
+
+  // Tri stable : apprenant (nom complet) → formation → module.position → ua.position
+  progresses.sort((a, b) => {
+    const an = a.enrollment.user.fullName.localeCompare(b.enrollment.user.fullName, 'fr');
+    if (an !== 0) return an;
+    const af = a.enrollment.formation.title.localeCompare(b.enrollment.formation.title, 'fr');
+    if (af !== 0) return af;
+    if (a.ua.module.position !== b.ua.module.position) return a.ua.module.position - b.ua.module.position;
+    return a.ua.position - b.ua.position;
+  });
+
+  const rows = progresses.map((p) => {
+    const { firstName, lastName } = splitFullName(p.enrollment.user.fullName);
+    return {
+      'Prenom': firstName,
+      'Nom': lastName,
+      'Courriel': p.enrollment.user.email,
+      'Adresse IP': p.ipAddress ?? '-',
+      'Pays': p.country ?? '-',
+      'Nom de formation': p.enrollment.formation.title,
+      'Nom du module': p.ua.module.title,
+      "Unite d'apprentissage": p.ua.title,
+      'Date de connexion': formatDate(p.firstAccessedAt),
+      'Date de sortie': formatDate(p.completedAt),
+      'Temps ecoule': formatDuration(p.timeSpentSeconds),
+      // Pattern cible : header `(%)` + valeur entier brut (cf. percentInt JSDoc)
+      'Progres (%)': percentInt(uaProgressDecimal(p.ua.type, p)),
+    };
+  });
+
+  return stringify(rows, { header: true, bom: true });
+}
+
+/**
+ * Export CSV Progression détaillée par apprenant — une ligne par UA par apprenant.
+ *
+ * Chaque ligne UA répète les infos de son module parent (statut module, %, temps),
+ * de sorte qu'une analyse Excel/PivotTable puisse remonter au niveau module sans
+ * jointure manuelle. Tri : apprenant → formation → position module → position UA.
+ *
+ * Filtres optionnels :
+ *  - `formationId` : `Enrollment.formationId`
+ *  - `sessionId`   : `Enrollment.dendreoSessionId`
+ *
+ * Inclusions :
+ *  - `Enrollment.status = 'active'`
+ *  - Toutes les UAs publiées des modules (y compris non démarrées)
+ *  - PAS de filtrage sur statut UA (contrairement au Financeur qui exclut not_started)
+ */
+export async function exportProgressionDetaillee(opts: {
+  formationId?: string;
+  sessionId?: string;
+}) {
+  const enrollments = await prisma.enrollment.findMany({
+    where: {
+      status: 'active',
+      ...(opts.formationId ? { formationId: opts.formationId } : {}),
+      ...(opts.sessionId ? { dendreoSessionId: opts.sessionId } : {}),
+    },
+    include: {
+      user: { select: { fullName: true, email: true } },
+      formation: {
+        select: {
+          id: true,
+          title: true,
+          modules: {
+            orderBy: { position: 'asc' },
+            select: {
+              id: true,
+              title: true,
+              position: true,
+              uas: {
+                where: { isPublished: true },
+                orderBy: { position: 'asc' },
+                // type + videoContent.durationSeconds requis pour la pondération par durée (PRD §3.4)
+                select: {
+                  id: true,
+                  title: true,
+                  type: true,
+                  position: true,
+                  videoContent: { select: { durationSeconds: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      uaProgresses: {
+        select: {
+          uaId: true,
+          status: true,
+          videoPercentWatched: true,
+          timeSpentSeconds: true,
+          firstAccessedAt: true,
+          completedAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+
+  // Tri stable des enrollments : apprenant (locale fr) → formation
+  enrollments.sort((a, b) => {
+    const an = a.user.fullName.localeCompare(b.user.fullName, 'fr');
+    if (an !== 0) return an;
+    return a.formation.title.localeCompare(b.formation.title, 'fr');
+  });
+
+  const rows: Record<string, unknown>[] = [];
+
+  for (const e of enrollments) {
+    const { firstName, lastName } = splitFullName(e.user.fullName);
+    const progressByUaId = new Map(e.uaProgresses.map((p) => [p.uaId, p]));
+
+    for (const mod of e.formation.modules) {
+      // Agrégats module — calculés une fois, répétés sur chaque ligne UA du module
+      const uaInputs = mod.uas.map((ua) => ({
+        status: (progressByUaId.get(ua.id)?.status ?? 'not_started') as CompletionStatus,
+        type: ua.type,
+        videoDurationSeconds: ua.videoContent?.durationSeconds,
+      }));
+      const moduleAgg = computeModuleProgress(uaInputs);
+      const moduleTimeSpent = mod.uas.reduce((s, ua) => s + (progressByUaId.get(ua.id)?.timeSpentSeconds ?? 0), 0);
+
+      for (const ua of mod.uas) {
+        const p = progressByUaId.get(ua.id);
+        const uaStatus: CompletionStatus = p?.status ?? 'not_started';
+        // Décimal 0..1 prêt pour formatPercent — vidéo: videoPercentWatched/100, autre: 1 ou 0
+        const uaProgress = ua.type === 'video'
+          ? (p?.videoPercentWatched ?? 0) / 100
+          : (uaStatus === 'completed' ? 1 : 0);
+
+        rows.push({
+          'Prenom': firstName,
+          'Nom': lastName,
+          'Courriel': e.user.email,
+          'Nom de formation': e.formation.title,
+          'Nom du module': mod.title,
+          'Position du module': mod.position + 1,
+          'Statut module': moduleStatusLabelFr(moduleAgg.status),
+          // Pattern cible : header `(%)` + valeur entier brut (cf. percentInt JSDoc)
+          'Progression module (%)': percentInt(moduleAgg.progressPercent / 100),
+          'Temps passe sur le module': formatDuration(moduleTimeSpent),
+          "Unite d'apprentissage": ua.title,
+          "Position de l'UA": ua.position + 1,
+          'Type UA': uaTypeLabelFr(ua.type),
+          'Statut UA': uaStatusLabelFr(uaStatus),
+          'Progression UA (%)': percentInt(uaProgress),
+          "Temps passe sur l'UA": formatDuration(p?.timeSpentSeconds ?? 0),
+          'Date 1ere activite UA': formatDate(p?.firstAccessedAt ?? null),
+          'Date derniere activite UA': formatDate(p?.updatedAt ?? null),
+          'Date completion UA': formatDate(p?.completedAt ?? null),
+        });
+      }
+    }
+  }
 
   return stringify(rows, { header: true, bom: true });
 }
