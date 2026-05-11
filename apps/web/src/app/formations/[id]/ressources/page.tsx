@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { ResourceViewer } from '@/components/ResourceViewer';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ interface Resource {
   fileName: string;
   fileType: string;
   fileSizeBytes: number | null;
+  isLocked: boolean;
 }
 
 interface ModuleResources {
@@ -162,9 +164,9 @@ export default function RessourcesPage() {
 
             {viewAll ? (
               /* ─── Vue a plat ─────────────────────────────────────────── */
-              <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+              <div className="space-y-4">
                 {data.all.map((r) => (
-                  <ResourceRow key={r.id} resource={r} downloading={downloading} onDownload={handleDownload} />
+                  <ResourceCard key={r.id} resource={r} formationId={formationId} downloading={downloading} onDownload={handleDownload} />
                 ))}
               </div>
             ) : (
@@ -173,9 +175,9 @@ export default function RessourcesPage() {
                 {data.byModule.map((mod) => (
                   <div key={mod.moduleId}>
                     <h3 className="text-sm font-semibold text-gray-900 mb-2">{mod.moduleTitle}</h3>
-                    <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+                    <div className="space-y-4">
                       {mod.resources.map((r) => (
-                        <ResourceRow key={r.id} resource={r} downloading={downloading} onDownload={handleDownload} />
+                        <ResourceCard key={r.id} resource={r} formationId={formationId} downloading={downloading} onDownload={handleDownload} />
                       ))}
                     </div>
                   </div>
@@ -189,44 +191,72 @@ export default function RessourcesPage() {
   );
 }
 
-// ─── Resource row ────────────────────────────────────────────────────────────
+// ─── Resource card (header + inline viewer lazy-loaded) ─────────────────────
 
-function ResourceRow({
+function ResourceCard({
   resource,
+  formationId,
   downloading,
   onDownload,
 }: {
   resource: Resource;
+  formationId: string;
   downloading: string | null;
   onDownload: (r: Resource) => void;
 }) {
   const isDownloading = downloading === resource.id;
 
+  // fetchSignedUrl mémoïsé : référence stable pour l'effect de ResourceViewer
+  // qui dépend de fetchSignedUrl (sinon refetch en boucle).
+  const fetchSignedUrl = useCallback(async (resourceId: string) => {
+    const res = await api.get<{ data: { signedUrl: string; fileName: string; fileType: string } }>(
+      `/player/resources/${resourceId}/preview`,
+    );
+    return res.data.signedUrl;
+  }, []);
+
   return (
-    <div className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3">
-      {fileIcon(resource.fileType)}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">{resource.fileName}</p>
-        <p className="text-xs text-gray-400 truncate">
-          {resource.uaTitle}
-          {resource.fileSizeBytes ? ` — ${formatSize(resource.fileSizeBytes)}` : ''}
-        </p>
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 border-b border-gray-100">
+        {fileIcon(resource.fileType)}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">{resource.fileName}</p>
+          <p className="text-xs text-gray-400 truncate">
+            {resource.uaTitle}
+            {resource.fileSizeBytes ? ` — ${formatSize(resource.fileSizeBytes)}` : ''}
+          </p>
+        </div>
+        {/* Bouton Télécharger masqué quand l'UA est verrouillée : sinon
+            l'apprenant contournerait la linéarité depuis le header. */}
+        {!resource.isLocked && (
+          <button
+            onClick={() => onDownload(resource)}
+            disabled={isDownloading}
+            aria-label="Télécharger"
+            className="flex items-center justify-center gap-1.5 px-3 text-sm text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0 min-w-[44px] min-h-[44px]"
+          >
+            {isDownloading ? (
+              <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+            )}
+            <span className="hidden sm:inline">Télécharger</span>
+          </button>
+        )}
       </div>
-      <button
-          onClick={() => onDownload(resource)}
-          disabled={isDownloading}
-          aria-label="Télécharger"
-          className="flex items-center justify-center gap-1.5 px-3 text-sm text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0 min-w-[44px] min-h-[44px]"
-        >
-          {isDownloading ? (
-            <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-          )}
-          <span className="hidden sm:inline">Télécharger</span>
-        </button>
+      <div className="p-3 sm:p-4">
+        <ResourceViewer
+          resourceId={resource.id}
+          fileType={resource.fileType}
+          fileName={resource.fileName}
+          fetchSignedUrl={fetchSignedUrl}
+          onDownload={() => onDownload(resource)}
+          backToFormationHref={`/formations/${formationId}`}
+          isLocked={resource.isLocked}
+        />
+      </div>
     </div>
   );
 }

@@ -51,5 +51,8 @@ playerResourcesRouter.use(authenticate, requireRole('learner'));
 // GET /api/v1/player/formations/:id/resources
 playerResourcesRouter.get('/formations/:id/resources', asyncHandler(ctrl.playerListResources));
 
+// GET /api/v1/player/resources/:id/preview — Signed URL pour viewer inline
+playerResourcesRouter.get('/resources/:id/preview', asyncHandler(ctrl.playerPreview));
+
 // GET /api/v1/player/resources/:id/download
 playerResourcesRouter.get('/resources/:id/download', asyncHandler(ctrl.playerDownload));

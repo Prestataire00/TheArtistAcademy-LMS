@@ -17,7 +17,7 @@ export async function playerGetUA(req: Request, res: Response) {
     : null;
 
   const resource = ua.type === 'resource'
-    ? await prisma.resource.findUnique({ where: { uaId }, select: { id: true, fileName: true } })
+    ? await prisma.resource.findUnique({ where: { uaId }, select: { id: true, fileName: true, fileType: true } })
     : null;
 
   res.json({
@@ -30,6 +30,7 @@ export async function playerGetUA(req: Request, res: Response) {
       durationSeconds: videoContent?.durationSeconds ?? null,
       resourceId: resource?.id ?? null,
       resourceFileName: resource?.fileName ?? null,
+      resourceFileType: resource?.fileType ?? null,
     },
   });
 }

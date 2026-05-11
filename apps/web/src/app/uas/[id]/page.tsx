@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { VideoPlayer } from '@/components/VideoPlayer';
+import { ResourceViewer } from '@/components/ResourceViewer';
 
 interface UAData {
   id: string;
@@ -14,6 +15,7 @@ interface UAData {
   durationSeconds: number | null;
   resourceId: string | null;
   resourceFileName: string | null;
+  resourceFileType: string | null;
 }
 
 export default function UAPage() {
@@ -126,80 +128,87 @@ export default function UAPage() {
           </div>
         )}
 
-        {ua.type === 'resource' && (
-          <ResourceAutoDownload uaId={ua.id} formationId={ua.formationId} />
+        {ua.type === 'resource' && ua.resourceId && (
+          <ResourceInlinePanel
+            resourceId={ua.resourceId}
+            fileType={ua.resourceFileType ?? 'application/octet-stream'}
+            fileName={ua.resourceFileName ?? 'fichier'}
+            formationId={ua.formationId}
+          />
         )}
       </main>
     </div>
   );
 }
 
-// ─── Resource auto-download ──────────────────────────────────────────────────
+// ─── Resource inline panel (header + viewer 700px + retour) ──────────────────
 
-function ResourceAutoDownload({ uaId, formationId }: { uaId: string; formationId: string }) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>('');
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+function ResourceInlinePanel({
+  resourceId,
+  fileType,
+  fileName,
+  formationId,
+}: {
+  resourceId: string;
+  fileType: string;
+  fileName: string;
+  formationId: string;
+}) {
+  // Préfère mémoïser : éviter de relancer l'effect interne du ResourceViewer
+  // (qui dépend de fetchSignedUrl) à chaque rerender.
+  const fetchSignedUrl = useCallback(async (id: string) => {
+    const r = await api.get<{ data: { signedUrl: string } }>(`/player/resources/${id}/preview`);
+    return r.data.signedUrl;
+  }, []);
 
-  useEffect(() => {
-    async function loadUrl() {
-      try {
-        const uaRes = await api.get<{ data: { resourceId: string | null; resourceFileName: string | null } }>(`/player/uas/${uaId}`);
-        const resourceId = uaRes.data.resourceId;
-        if (!resourceId) { setStatus('error'); return; }
-        setFileName(uaRes.data.resourceFileName || 'fichier');
-
-        const dlRes = await api.get<{ data: { signedUrl: string } }>(`/player/resources/${resourceId}/download`);
-        setSignedUrl(dlRes.data.signedUrl);
-        setStatus('ready');
-      } catch {
-        setStatus('error');
-      }
+  async function handleDownload() {
+    try {
+      const r = await api.get<{ data: { signedUrl: string; fileName: string } }>(`/player/resources/${resourceId}/download`);
+      const a = document.createElement('a');
+      a.href = r.data.signedUrl;
+      a.download = r.data.fileName || fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      // Si le download échoue (par ex. UA_LOCKED), pas grand chose à faire ici ;
+      // le viewer affiche déjà l'état de blocage de façon propre.
     }
-    loadUrl();
-  }, [uaId]);
-
-  if (status === 'loading') {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-        <div className="flex items-center justify-center gap-3 text-gray-500">
-          <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-          Chargement de la ressource...
-        </div>
-      </div>
-    );
-  }
-
-  if (status === 'error' || !signedUrl) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-        <p className="text-gray-500 mb-4">Impossible de charger la ressource</p>
-        <a href={`/formations/${formationId}`} className="text-brand-600 hover:text-brand-700 text-sm font-medium">
-          Retour à la formation
-        </a>
-      </div>
-    );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8 text-center">
-      <svg className="w-12 h-12 text-red-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-      <p className="text-sm font-medium text-gray-900 mb-1 break-words">{fileName}</p>
-      <p className="text-xs text-gray-400 mb-6">Cliquez pour telecharger la ressource</p>
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-center gap-3">
-        <a
-          href={signedUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium text-sm min-h-[44px]"
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg border border-gray-200 px-4 sm:px-5 py-3 flex items-center gap-3 sm:gap-4">
+        <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+          <span className="text-xs font-bold text-red-600">
+            {fileType === 'application/pdf' ? 'PDF' : fileType.startsWith('image/') ? 'IMG' : fileType.startsWith('video/') ? 'VID' : 'DOC'}
+          </span>
+        </div>
+        <p className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate">{fileName}</p>
+        <button
+          onClick={handleDownload}
+          aria-label="Télécharger"
+          className="flex items-center justify-center gap-1.5 px-3 text-sm text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors flex-shrink-0 min-w-[44px] min-h-[44px]"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
           </svg>
-          Télécharger
-        </a>
+          <span className="hidden sm:inline">Télécharger</span>
+        </button>
+      </div>
+
+      <ResourceViewer
+        resourceId={resourceId}
+        fileType={fileType}
+        fileName={fileName}
+        fetchSignedUrl={fetchSignedUrl}
+        onDownload={handleDownload}
+        eager
+        height={700}
+        backToFormationHref={`/formations/${formationId}`}
+      />
+
+      <div className="flex justify-center">
         <a
           href={`/formations/${formationId}`}
           className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm min-h-[44px]"

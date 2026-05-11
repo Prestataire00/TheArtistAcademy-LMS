@@ -9,6 +9,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/admin/ToastContext';
 import { Modal } from '@/components/Modal';
 import { SlideOver } from '@/components/SlideOver';
+import { ResourceViewer } from '@/components/ResourceViewer';
 import { useIsDesktop } from '@/lib/useIsDesktop';
 
 interface ResourceInfo { id: string; fileName: string; fileType: string; fileSizeBytes: number | null }
@@ -38,6 +39,13 @@ export default function AdminModuleDetailPage() {
 
   // Upload state
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+
+  // Resource preview slide-over (remplace l'ancien window.open).
+  const [previewResource, setPreviewResource] = useState<{ uaId: string; fileType: string; fileName: string } | null>(null);
+  const fetchResourcePreviewUrl = useCallback(async (uaId: string) => {
+    const r = await api.get<{ data: { signedUrl: string; fileName: string } }>(`/admin/resources/${uaId}/preview`);
+    return r.data.signedUrl;
+  }, []);
 
   const loadData = useCallback(() => {
     if (!moduleId) return;
@@ -169,6 +177,19 @@ export default function AdminModuleDetailPage() {
         />
       )}
 
+      {/* Resource preview slide-over (inline viewer) */}
+      {previewResource && (
+        <SlideOver title={previewResource.fileName} maxWidth={900} onClose={() => setPreviewResource(null)}>
+          <ResourceViewer
+            resourceId={previewResource.uaId}
+            fileType={previewResource.fileType}
+            fileName={previewResource.fileName}
+            fetchSignedUrl={fetchResourcePreviewUrl}
+            eager
+          />
+        </SlideOver>
+      )}
+
       {/* Quiz editor modal */}
       {quizUaId && quizData && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
@@ -274,6 +295,7 @@ export default function AdminModuleDetailPage() {
                         asCard={false}
                         uploadingId={uploadingId}
                         onOpenQuiz={() => openQuizEditor(ua.id)}
+                        onOpenResourcePreview={(r) => setPreviewResource({ uaId: ua.id, fileType: r.fileType, fileName: r.fileName })}
                         onUpload={(type, file) => handleUpload(ua.id, type, file)}
                         onDelete={() => handleDeleteUA(ua.id, ua.title)}
                         onUpdate={() => { loadData(); }}
@@ -292,6 +314,7 @@ export default function AdminModuleDetailPage() {
                     asCard={true}
                     uploadingId={uploadingId}
                     onOpenQuiz={() => openQuizEditor(ua.id)}
+                    onOpenResourcePreview={(r) => setPreviewResource({ uaId: ua.id, fileType: r.fileType, fileName: r.fileName })}
                     onUpload={(type, file) => handleUpload(ua.id, type, file)}
                     onDelete={() => handleDeleteUA(ua.id, ua.title)}
                     onUpdate={() => { loadData(); }}
@@ -311,10 +334,11 @@ export default function AdminModuleDetailPage() {
 
 function SortableUARow(props: {
   ua: UA; asCard: boolean; uploadingId: string | null; onOpenQuiz: () => void;
+  onOpenResourcePreview: (r: ResourceInfo) => void;
   onUpload: (type: 'video' | 'resource', file: File) => void;
   onDelete: () => void; onUpdate: () => void; onFlash: (message: string, type?: 'success' | 'error' | 'info') => void;
 }) {
-  const { ua, asCard, uploadingId, onOpenQuiz, onUpload, onDelete, onUpdate, onFlash } = props;
+  const { ua, asCard, uploadingId, onOpenQuiz, onOpenResourcePreview, onUpload, onDelete, onUpdate, onFlash } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ua.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
@@ -358,7 +382,7 @@ function SortableUARow(props: {
         <>
           {ua.resource && (
             <>
-              <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string}}>(`/admin/resources/${ua.id}/preview`); window.open(r.data.signedUrl, '_blank'); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
+              <button onClick={() => onOpenResourcePreview(ua.resource!)} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Voir</button>
               <button onClick={async () => { try { const r = await api.get<{data:{signedUrl:string;fileName:string}}>(`/admin/resources/${ua.id}/preview`); const a=document.createElement('a');a.href=r.data.signedUrl;a.download=r.data.fileName;document.body.appendChild(a);a.click();document.body.removeChild(a); } catch {} }} className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Télécharger</button>
             </>
           )}

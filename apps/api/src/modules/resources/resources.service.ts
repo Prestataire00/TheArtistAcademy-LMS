@@ -1,6 +1,8 @@
+import type { CompletionStatus } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { supabase, RESOURCES_BUCKET } from '../../config/supabase';
 import { NotFoundError, BadRequestError } from '../../shared/errors';
+import { computePathwayLocks } from '../../shared/pathway';
 
 const ALLOWED_MIMES = new Set([
   'application/pdf',
@@ -92,15 +94,19 @@ export async function deleteResource(uaId: string) {
 
 // ─── Player ───────────────────────────────────────────────────────────────────
 
-export async function getFormationResources(formationId: string) {
+export async function getFormationResources(formationId: string, enrollmentId: string) {
   const formation = await prisma.formation.findUnique({
     where: { id: formationId },
     include: {
+      // On a besoin de TOUS les UAs publiés (pas seulement type=resource) pour
+      // calculer correctement la linéarité — un UA quiz/vidéo qui précède une
+      // ressource doit être complété pour la déverrouiller.
       modules: {
+        where: { isPublished: true },
         orderBy: { position: 'asc' },
         include: {
           uas: {
-            where: { type: 'resource' },
+            where: { isPublished: true },
             orderBy: { position: 'asc' },
             include: { resource: true },
           },
@@ -109,6 +115,23 @@ export async function getFormationResources(formationId: string) {
     },
   });
   if (!formation) throw new NotFoundError('Formation');
+
+  // Statuts de progression pour cet enrollment → input du calcul de locks.
+  const uaProgresses = await prisma.uAProgress.findMany({
+    where: { enrollmentId },
+    select: { uaId: true, status: true },
+  });
+  const statusMap = new Map<string, CompletionStatus>(uaProgresses.map((p) => [p.uaId, p.status]));
+
+  const { uaLocks } = computePathwayLocks(
+    formation.pathwayMode as 'linear' | 'free',
+    formation.modules.map((m) => ({
+      id: m.id,
+      position: m.position,
+      uas: m.uas.map((u) => ({ id: u.id, position: u.position })),
+    })),
+    statusMap,
+  );
 
   const byModule = formation.modules
     .filter((m) => m.uas.some((ua) => ua.resource))
@@ -125,6 +148,7 @@ export async function getFormationResources(formationId: string) {
           fileName: ua.resource!.fileName,
           fileType: ua.resource!.fileType,
           fileSizeBytes: ua.resource!.fileSizeBytes,
+          isLocked: uaLocks.get(ua.id) ?? false,
         })),
     }));
 
@@ -166,6 +190,31 @@ export async function generatePreviewUrlByUaId(uaId: string): Promise<{ signedUr
   }
 
   return { signedUrl: data.signedUrl, fileName: resource.fileName };
+}
+
+/**
+ * Signed URL pour viewer inline côté apprenant (iframe/img/video).
+ * Pas d'option `download` → Content-Disposition: inline → le browser rend
+ * le fichier au lieu de le télécharger.
+ */
+export async function generatePreviewUrlByResourceId(
+  resourceId: string,
+): Promise<{ signedUrl: string; resource: { uaId: string; fileName: string; fileType: string } }> {
+  const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+  if (!resource) throw new NotFoundError('Ressource');
+
+  const { data, error } = await supabase.storage
+    .from(RESOURCES_BUCKET)
+    .createSignedUrl(resource.fileUrl, SIGNED_DOWNLOAD_TTL);
+
+  if (error || !data?.signedUrl) {
+    throw new BadRequestError('Impossible de générer le lien de prévisualisation');
+  }
+
+  return {
+    signedUrl: data.signedUrl,
+    resource: { uaId: resource.uaId, fileName: resource.fileName, fileType: resource.fileType },
+  };
 }
 
 export async function markResourceCompleted(enrollmentId: string, uaId: string) {

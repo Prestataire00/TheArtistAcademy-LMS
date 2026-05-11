@@ -62,8 +62,34 @@ export async function playerListResources(req: Request, res: Response) {
     throw new BadRequestError("Vous n'avez pas d'inscription active pour cette formation");
   }
 
-  const resources = await service.getFormationResources(formationId);
+  const resources = await service.getFormationResources(formationId, enrollment.id);
   res.json({ data: resources });
+}
+
+export async function playerPreview(req: Request, res: Response) {
+  const resourceId = req.params.id;
+  const userId = req.user!.userId;
+
+  const { signedUrl, resource } = await service.generatePreviewUrlByResourceId(resourceId);
+
+  // Verify enrollment access via the linked UA.
+  const { enrollment } = await verifyLearnerAccess(userId, resource.uaId);
+
+  // L'aperçu inline compte comme une consultation → on marque l'UA completed
+  // (cohérent avec le download : "ouverture = complétion").
+  await service.markResourceCompleted(enrollment.id, resource.uaId);
+
+  await logEvent({
+    category: 'navigation',
+    action: 'resource_previewed',
+    userId,
+    enrollmentId: enrollment.id,
+    entityType: 'resource',
+    entityId: resourceId,
+    payload: { fileName: resource.fileName, fileType: resource.fileType, uaId: resource.uaId },
+  });
+
+  res.json({ data: { signedUrl, fileName: resource.fileName, fileType: resource.fileType } });
 }
 
 export async function playerDownload(req: Request, res: Response) {

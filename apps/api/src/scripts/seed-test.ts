@@ -4,7 +4,10 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  // Toutes les dates sont calculées à l'exécution → relancer le seed
+  // semaines/mois plus tard produit toujours une fenêtre d'inscription active.
   const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   // 1. Formation
@@ -57,7 +60,7 @@ async function main() {
       userId: user.id,
       formationId: formation.id,
       dendreoEnrolmentId: `seed_${Date.now()}`,
-      startDate: now,
+      startDate: sevenDaysAgo,
       endDate: in30Days,
       status: 'active',
     },
@@ -151,7 +154,7 @@ async function main() {
     data: {
       userId: alice.id, formationId: targetFormationId,
       dendreoEnrolmentId: `seed_alice1_${Date.now()}`,
-      startDate: new Date(now.getTime() - 86400000), endDate: in30Days, status: 'active',
+      startDate: sevenDaysAgo, endDate: in30Days, status: 'active',
     },
   });
 
@@ -162,7 +165,7 @@ async function main() {
       data: {
         userId: alice.id, formationId: formationArtNum.id,
         dendreoEnrolmentId: `seed_alice2_${Date.now()}`,
-        startDate: new Date(now.getTime() - 86400000), endDate: in30Days, status: 'active',
+        startDate: sevenDaysAgo, endDate: in30Days, status: 'active',
       },
     });
   }
@@ -178,7 +181,7 @@ async function main() {
     data: {
       userId: bob.id, formationId: targetFormationId,
       dendreoEnrolmentId: `seed_bob_${Date.now()}`,
-      startDate: new Date(now.getTime() - 86400000), endDate: in30Days, status: 'active',
+      startDate: sevenDaysAgo, endDate: in30Days, status: 'active',
     },
   });
 
