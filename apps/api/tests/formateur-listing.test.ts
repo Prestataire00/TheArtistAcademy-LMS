@@ -1,12 +1,17 @@
-// Phase 2A bis — chantier 3 (fix runtime) : conditions d'affichage des
-// formations dans /formateur/sessions et /formateur/contenus.
+// Conditions d'affichage des formations dans /formateur/sessions et
+// /formateur/contenus.
 //
-// Règles métier :
-//   - /formateur/sessions  : trainerId + isPublished + ≥1 enrollment
-//   - /formateur/contenus  : trainerId + isPublished (peu importe le contenu)
-//     → une formation publiée sans contenu éditable doit remonter avec
-//       modules: [] pour qu'on l'affiche avec un état vide explicite,
-//       au lieu d'être masquée et de faire croire à l'absence d'assignation.
+// Règle métier (validée — table de vérité finale) :
+//   - listEditableContent (/formateur/contenus, vue ÉDITION) :
+//     trainerId match ET isPublished: true. Le nombre d'inscrits N'EST
+//     PAS un critère (préparer le contenu en amont, avant inscrits).
+//   - listSessions (/formateur/sessions, vue PILOTAGE pédagogique) :
+//     trainerId match ET isPublished: true ET ≥1 inscrit. Une formation
+//     publiée sans inscrit n'a rien à piloter → masquée ici (mais reste
+//     visible dans /contenus pour l'édition).
+//   - Module visible ssi `isPublished: true` dans les deux vues.
+//   - UA visible ssi `isPublished: true` ET `type ∈ {quiz, resource}`
+//     dans /contenus (le frontend ne sait pas éditer les autres types).
 //
 // On teste les services directement (pas via Express) : mocks Prisma au
 // minimum, on inspecte les `where` envoyés et le shape retourné.
@@ -43,7 +48,7 @@ beforeEach(() => {
 
 // ─── /formateur/sessions ─────────────────────────────────────────────────────
 
-describe('listSessions — conditions d\'affichage', () => {
+describe('listSessions — conditions d\'affichage (vue pilotage)', () => {
   it("filtre sur trainerId + isPublished + enrollments: { some: {} }", async () => {
     formationFindMany.mockResolvedValue([]);
     await listSessions(TRAINER_ID);
@@ -56,7 +61,7 @@ describe('listSessions — conditions d\'affichage', () => {
     });
   });
 
-  it("retourne une formation publiée avec ≥1 enrollment (cas nominal)", async () => {
+  it("retourne une formation avec ≥1 enrollment (cas nominal)", async () => {
     formationFindMany.mockResolvedValue([
       {
         id: 'f1',
@@ -74,27 +79,102 @@ describe('listSessions — conditions d\'affichage', () => {
     expect(sessions[0].learnersCount).toBe(1);
   });
 
-  it("retourne [] si la query Prisma renvoie [] (formation sans enrollment ou non publiée)", async () => {
-    // La condition where: { isPublished + enrollments: { some: {} } }
-    // est appliquée côté DB ; on simule juste son résultat vide pour
-    // confirmer que le service ne crée pas d'entrée fantôme.
+  it("formation publiée SANS inscrit → MASQUÉE par le filtre DB enrollments: { some: {} }", async () => {
+    // Une formation sans aucun inscrit n'a rien à piloter ici → Prisma
+    // ne la renvoie pas. Le service voit [] et retourne []. On contraste
+    // explicitement avec listEditableContent où elle DOIT apparaître.
     formationFindMany.mockResolvedValue([]);
     const sessions = await listSessions(TRAINER_ID);
     expect(sessions).toEqual([]);
+
+    const callArg = formationFindMany.mock.calls[0][0];
+    expect(callArg.where.enrollments).toEqual({ some: {} });
+  });
+
+  it("formation en BROUILLON → filtrée out par le where DB (where.isPublished: true)", async () => {
+    formationFindMany.mockResolvedValue([]);
+    await listSessions(TRAINER_ID);
+
+    const callArg = formationFindMany.mock.calls[0][0];
+    expect(callArg.where.isPublished).toBe(true);
+  });
+
+  it("non-régression : seules les formations avec ≥1 inscrit remontent", async () => {
+    // On simule la query qui appliquerait le filtre `enrollments: some {}`
+    // côté DB : elle ne renvoie QUE les formations avec inscrits. Le service
+    // doit refléter ça (1-pour-1, pas de tri/filtre supplémentaire).
+    formationFindMany.mockResolvedValue([
+      {
+        id: 'f-with-learners',
+        title: 'Avec inscrits',
+        _count: { modules: 1 },
+        modules: [{ uas: [{ id: 'ua1' }] }],
+        enrollments: [
+          { uaProgresses: [], formationProgress: null },
+          { uaProgresses: [], formationProgress: null },
+        ],
+      },
+    ]);
+
+    const sessions = await listSessions(TRAINER_ID);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].formationId).toBe('f-with-learners');
+    expect(sessions[0].learnersCount).toBe(2);
   });
 });
 
 // ─── /formateur/contenus ─────────────────────────────────────────────────────
 
 describe('listEditableContent — conditions d\'affichage', () => {
-  it("filtre sur trainerId + isPublished, PAS sur la présence de contenu", async () => {
+  it("filtre sur trainerId + isPublished, PAS sur enrollments", async () => {
     formationFindMany.mockResolvedValue([]);
     await listEditableContent(TRAINER_ID);
 
     const callArg = formationFindMany.mock.calls[0][0];
-    expect(callArg.where).toEqual({
-      trainerId: TRAINER_ID,
+    expect(callArg.where).toEqual({ trainerId: TRAINER_ID, isPublished: true });
+    expect(callArg.where.enrollments).toBeUndefined();
+  });
+
+  it("formation en BROUILLON → filtrée out par le where DB", async () => {
+    formationFindMany.mockResolvedValue([]);
+    await listEditableContent(TRAINER_ID);
+
+    const callArg = formationFindMany.mock.calls[0][0];
+    expect(callArg.where.isPublished).toBe(true);
+  });
+
+  it("formation publiée SANS inscrit → VISIBLE (contraste avec listSessions)", async () => {
+    // Édition : le formateur doit pouvoir préparer le contenu d'une
+    // formation publiée même sans inscrit. À comparer avec listSessions
+    // où la même formation serait masquée (rien à piloter).
+    formationFindMany.mockResolvedValue([
+      { id: 'f-no-learners', title: 'Publiée 0 inscrit', modules: [] },
+    ]);
+
+    const data = await listEditableContent(TRAINER_ID);
+    expect(data).toHaveLength(1);
+    expect(data[0].formationId).toBe('f-no-learners');
+
+    const callArg = formationFindMany.mock.calls[0][0];
+    expect(callArg.where.enrollments).toBeUndefined();
+  });
+
+  it("include modules : filtre isPublished=true (modules brouillons masqués côté DB)", async () => {
+    formationFindMany.mockResolvedValue([]);
+    await listEditableContent(TRAINER_ID);
+
+    const callArg = formationFindMany.mock.calls[0][0];
+    expect(callArg.include.modules.where).toEqual({ isPublished: true });
+  });
+
+  it("include UAs : filtre isPublished=true ET type ∈ {quiz, resource}", async () => {
+    formationFindMany.mockResolvedValue([]);
+    await listEditableContent(TRAINER_ID);
+
+    const callArg = formationFindMany.mock.calls[0][0];
+    expect(callArg.include.modules.include.uas.where).toEqual({
       isPublished: true,
+      type: { in: ['quiz', 'resource'] },
     });
   });
 
@@ -129,15 +209,14 @@ describe('listEditableContent — conditions d\'affichage', () => {
     expect(data[0].modules[0].uas[0].quiz).toEqual({ id: 'q1', questionsCount: 3 });
   });
 
-  it("formation publiée AVEC modules publiés SANS UA quiz/resource → la voit avec modules: []", async () => {
-    // La query Prisma include filtre les UAs au niveau include (type: quiz/resource).
-    // Si aucun module n'a d'UA matchant, m.uas vient à []. Le service filtre
-    // alors les modules sans UAs (.filter), mais ne filtre PLUS la formation
-    // entière → la formation remonte avec modules: [].
+  it("formation publiée AVEC modules publiés SANS UA éditable → la voit avec modules: []", async () => {
+    // Soit le module n'a que des vidéos (type filtré), soit les UAs sont
+    // toutes en brouillon (isPublished filtré). Dans les deux cas, le
+    // module remonte avec uas: [] et est filtré par le service.
     formationFindMany.mockResolvedValue([
       {
         id: 'f-empty-ua',
-        title: 'Que des vidéos',
+        title: 'Que des vidéos / brouillons',
         modules: [
           { id: 'm1', title: 'Module 1', uas: [] },
         ],
@@ -151,6 +230,8 @@ describe('listEditableContent — conditions d\'affichage', () => {
   });
 
   it("formation publiée SANS modules publiés → la voit avec modules: []", async () => {
+    // Cas : tous les modules sont en brouillon (filtrés à l'include) →
+    // f.modules vient à []. La formation remonte quand même.
     formationFindMany.mockResolvedValue([
       { id: 'f-no-modules', title: 'Squelette', modules: [] },
     ]);
@@ -161,14 +242,62 @@ describe('listEditableContent — conditions d\'affichage', () => {
     expect(data[0].modules).toEqual([]);
   });
 
-  it("formation NON publiée → la query DB la filtre out (where.isPublished: true), pas dans la réponse", async () => {
-    // Confirmation que le filtre DB suffit : si la formation n'est pas
-    // publiée, Prisma ne la renvoie pas → service renvoie [].
-    formationFindMany.mockResolvedValue([]);
+  it("module brouillon dans formation publiée → masqué (filtre include isPublished=true)", async () => {
+    // Reproduit le scénario : Prisma filtre les modules brouillons à
+    // l'include. Le mock simule ce filtre en ne renvoyant que les modules
+    // publiés. On confirme que la clause where est bien en place.
+    formationFindMany.mockResolvedValue([
+      {
+        id: 'f1',
+        title: 'Mix publié + brouillon',
+        modules: [
+          {
+            id: 'm-published',
+            title: 'Module publié',
+            uas: [
+              { id: 'ua1', title: 'Q1', type: 'quiz', quiz: { id: 'q1', _count: { questions: 1 } }, resource: null },
+            ],
+          },
+          // m-draft (isPublished=false) absent : déjà filtré par Prisma.
+        ],
+      },
+    ]);
+
     const data = await listEditableContent(TRAINER_ID);
-    expect(data).toEqual([]);
+    expect(data[0].modules).toHaveLength(1);
+    expect(data[0].modules[0].moduleId).toBe('m-published');
+
+    // Vérifie aussi la clause where côté DB qui produit ce résultat.
+    const callArg = formationFindMany.mock.calls[0][0];
+    expect(callArg.include.modules.where.isPublished).toBe(true);
+  });
+
+  it("UA brouillon dans module publié → masquée (filtre include isPublished=true)", async () => {
+    // Prisma filtre les UAs brouillons à l'include nested. Le mock simule
+    // ce filtre. On confirme la clause where + que seules les UAs
+    // publiées remontent dans la réponse.
+    formationFindMany.mockResolvedValue([
+      {
+        id: 'f1',
+        title: 'UA mix',
+        modules: [
+          {
+            id: 'm1',
+            title: 'Module 1',
+            uas: [
+              { id: 'ua-published', title: 'Q publié', type: 'quiz', quiz: { id: 'q1', _count: { questions: 2 } }, resource: null },
+              // ua-draft (isPublished=false) absent : déjà filtré par Prisma.
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const data = await listEditableContent(TRAINER_ID);
+    expect(data[0].modules[0].uas).toHaveLength(1);
+    expect(data[0].modules[0].uas[0].id).toBe('ua-published');
 
     const callArg = formationFindMany.mock.calls[0][0];
-    expect(callArg.where.isPublished).toBe(true);
+    expect(callArg.include.modules.include.uas.where.isPublished).toBe(true);
   });
 });

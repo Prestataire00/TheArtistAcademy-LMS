@@ -4,15 +4,17 @@ import { prisma } from '../../config/database';
  * Liste les formations dont le formateur est responsable (trainerId),
  * avec leurs UAs de type quiz et resource editables.
  *
- * Conditions sur la formation : trainerId + isPublished. On ne filtre
- * PAS sur la présence d'au moins un module / une UA éditable : un
- * formateur doit voir ses formations publiées même quand il n'y a rien
- * à éditer (modules: [] dans la réponse), pour signaler explicitement
- * qu'il n'a pas encore de contenu à gérer (au lieu de masquer la
- * formation, ce qui faisait croire à une absence d'assignation).
+ * Règle métier (validée — voir table de vérité dans le PR/commit) :
+ *   - Formation visible ssi : `trainerId match` ET `isPublished: true`.
+ *     Brouillon → masquée. Nombre d'inscrits non pertinent.
+ *   - Module visible ssi : `isPublished: true` (modules brouillons masqués).
+ *   - UA visible ssi : `isPublished: true` (UAs brouillons masquées) ET
+ *     `type ∈ {quiz, resource}` (le frontend formateur ne sait pas éditer
+ *     d'autres types).
  *
- * Les modules en brouillon et les UAs autres que quiz/resource sont
- * filtrés à l'include (c'est de la responsabilité admin, pas formateur).
+ * On ne filtre PAS sur la présence d'au moins une UA éditable : on retourne
+ * `modules: []` plutôt que de masquer la formation (sinon le formateur
+ * croirait à une absence d'assignation).
  */
 export async function listEditableContent(trainerId: string) {
   const formations = await prisma.formation.findMany({
@@ -24,7 +26,7 @@ export async function listEditableContent(trainerId: string) {
         orderBy: { position: 'asc' },
         include: {
           uas: {
-            where: { type: { in: ['quiz', 'resource'] } },
+            where: { isPublished: true, type: { in: ['quiz', 'resource'] } },
             orderBy: { position: 'asc' },
             include: {
               quiz: { select: { id: true, _count: { select: { questions: true } } } },

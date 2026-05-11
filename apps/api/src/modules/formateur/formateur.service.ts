@@ -18,10 +18,15 @@ async function requireFormationOwnership(formationId: string, trainerId: string)
 }
 
 /**
- * Liste les formations dont le formateur est responsable (trainerId).
- * Conditions cumulées : formation publiée + au moins un enrollment.
- * Une formation en brouillon ou sans inscrit n'apparaît pas dans
- * "Mes sessions" — pour gérer le contenu en amont, voir /formateur/contenus.
+ * Liste les formations dont le formateur est responsable (trainerId),
+ * pour la vue PILOTAGE pédagogique (suivi apprenants, taux complétion).
+ *
+ * Règle métier : `trainerId match` ET `isPublished: true` ET ≥1 inscrit.
+ *   - Une formation sans aucun inscrit n'a pas d'intérêt sur cette vue
+ *     (rien à piloter) → on la masque ici. Pour préparer le contenu en
+ *     amont, le formateur passe par /formateur/contenus.
+ *   - À ne pas confondre avec listEditableContent (/formateur/contenus)
+ *     qui n'a pas de filtre `enrollments`.
  */
 export async function listSessions(trainerId: string) {
   const formations = await prisma.formation.findMany({
