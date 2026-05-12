@@ -31,14 +31,23 @@ function SsoDendreoInner() {
       return;
     }
 
-    try {
-      localStorage.setItem('token', token);
-    } catch {
-      // Si localStorage est désactivé, on continue : le cookie côté API
-      // (set par GET /auth/sso) pourra encore servir si même domaine.
-    }
+    // Purge le cookie API d'une session précédente (typiquement admin loggé
+    // via /login sur le même navigateur) avant d'installer ce token apprenant.
+    // Évite que cookie et localStorage pointent sur deux identités différentes.
+    (async () => {
+      try {
+        await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+      } catch { /* ignore — pas bloquant */ }
 
-    router.replace(`/formations/${trainingId}`);
+      try {
+        localStorage.setItem('token', token);
+      } catch {
+        // Si localStorage est désactivé, on continue : le cookie côté API
+        // (set par GET /auth/sso) pourra encore servir si même domaine.
+      }
+
+      router.replace(`/formations/${trainingId}`);
+    })();
   }, [router, searchParams]);
 
   return (

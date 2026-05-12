@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatDuration, formatDate, formatStatus } from '@/lib/formatters';
 import { ProgressBar } from '@/components/progress/ProgressBar';
@@ -142,9 +142,22 @@ function StatusBadge({ status }: { status: CompletionStatus }) {
 
 export default function FormationPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<FormationPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Arrivée via SSO Dendreo standard : le middleware Next.js a posé un cookie
+  // HttpOnly frais mais ne peut pas toucher au localStorage. Un token résiduel
+  // d'une session admin précédente serait alors prioritaire dans lib/api.ts
+  // (Bearer > cookie côté API) et provoquerait des 403 sur les routes player.
+  // `?enrolment=` est préservé par le middleware après strip de `?token=` et
+  // sert ici de signal SSO pour purger ce résidu.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!searchParams.get('enrolment')) return;
+    try { window.localStorage.removeItem('token'); } catch { /* ignore */ }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!params.id) return;

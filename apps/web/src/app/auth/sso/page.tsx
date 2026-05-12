@@ -28,13 +28,21 @@ function AuthSsoInner() {
       return;
     }
 
-    try {
-      localStorage.setItem('token', token);
-    } catch {
-      /* ignore */
-    }
+    // Purge le cookie API d'une session précédente avant d'installer ce token.
+    // Évite que cookie et localStorage pointent sur deux identités différentes.
+    (async () => {
+      try {
+        await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+      } catch { /* ignore */ }
 
-    router.replace(trainingId ? `/formations/${trainingId}` : '/');
+      try {
+        localStorage.setItem('token', token);
+      } catch {
+        /* ignore */
+      }
+
+      router.replace(trainingId ? `/formations/${trainingId}` : '/');
+    })();
   }, [router, searchParams]);
 
   return (
