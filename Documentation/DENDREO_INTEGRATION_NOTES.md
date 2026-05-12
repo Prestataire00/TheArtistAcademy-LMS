@@ -1,7 +1,7 @@
 # Intégration Dendreo — Notes de tests
 
 > Document de référence pour l'intégration avec le Connecteur LMS Universel Dendreo.
-> Dernière mise à jour : 08/05/2026 — **Phase 2B livrée (refonte handler `user.created`, bug c résolu, déployée en prod)**.
+> Dernière mise à jour : 12/05/2026 — **Bugs cache Dendreo (g, h, i) découverts après Phase 2B lors des tests parcours apprenant — nouveaux bloqueurs prod.**
 
 ---
 
@@ -299,6 +299,46 @@ Cleanup manuel effectué via SQL Supabase **après** déploiement de la Phase 2B
 
 **Risque résiduel : aucun.** Le prochain SSO de Eva 2252 depuis Dendreo matchera par `dendreoUserId` sur le user apprenant placeholder, pas sur l'admin.
 
+> ⚠️ **Mise à jour 12/05/2026** : la phrase « risque résiduel : aucun » s'est révélée **inexacte côté axe Dendreo → LMS**. Le cleanup côté LMS n'invalide PAS le cache `participant_id ↔ user_id_lms` côté Dendreo, qui continue d'envoyer l'ancien `user_id` (admin pollué) sur les `enrolment.created` et les JWT SSO. Cf. **Limitations cache Dendreo** + bugs g/h/i ci-dessous.
+
+---
+
+## Limitations cache Dendreo (découvert 12/05/2026)
+
+### Symptôme
+
+Après le cleanup SQL Phase 2B sur le compte admin Eva, les tests parcours apprenant ont révélé que Dendreo **conserve en cache** le mapping `participant_id ↔ user_id_lms` qui lui avait été renvoyé par le handler `user.created` bugué (bug c, avant fix).
+
+Conséquence : tous les flux Dendreo → LMS (webhooks `enrolment.created` + JWT SSO) **continuent à envoyer l'ancien `user_id` (ID admin pollué historique)**, même après que le LMS ait dépollué l'admin et créé le bon user apprenant placeholder. Le LMS, qui fait actuellement confiance aveuglément au `user_id` reçu, agit donc sur le mauvais user.
+
+### Scénario observé (Eva, participant Dendreo `2252`)
+
+1. **Avant Phase 2B** — `user.created` bugué écrase l'admin Eva. Le LMS renvoie à Dendreo `user_id_lms = cmo3dxcdz000os9ko0b3fq8yz` (ID de l'admin).
+2. **Dendreo met en cache** : participant `2252` ↔ `user_id_lms = cmo3dxcdz000os9ko0b3fq8yz`.
+3. **Phase 2B (cleanup SQL)** — LMS dépollue l'admin (`dendreo_user_id=NULL`) et crée un user apprenant placeholder `cleva59f40c09724fd72ebac9` (email `dendreo-2252@no-email.local`).
+4. **Dendreo n'est PAS notifié** du changement de mapping côté LMS.
+5. **Test 12/05/2026** — Eva refait un SSO depuis l'extranet → Dendreo envoie un JWT avec `user_id = cmo3dxcdz...` (l'admin) → le LMS connecte Eva **en tant qu'admin**, pas en tant que learner.
+6. Idem pour les `enrolment.created` subséquents : le payload contient `user_id = cmo3dxcdz...` → enrollment créé sur l'admin.
+
+### Cause racine
+
+C'est un **problème de design de l'intégration Dendreo** : aucun mécanisme exposé côté LMS pour invalider/mettre à jour le mapping `participant_id ↔ user_id_lms` côté Dendreo. Le bug c côté LMS a injecté une donnée pourrie dans le cache Dendreo ; on ne sait plus la corriger sans intervention manuelle Dendreo (cf. bug i).
+
+### Workaround actuel (12/05/2026)
+
+Pour tester le parcours apprenant avec un participant Dendreo dont l'historique est compromis (créé avant la Phase 2B), **créer un nouveau participant Dendreo avec un email distinct et qui ne collisionne avec aucun user LMS existant**. Ce nouveau participant n'aura jamais d'entrée polluée dans le cache Dendreo et suivra le flux nominal.
+
+Cela ne résout PAS le problème pour les participants pré-Phase 2B déjà polluants — il faudra soit demander un reset à Dendreo (cf. bug i), soit attendre une solution durable côté LMS (refus de SSO/enrolment quand le `user_id` pointe sur un admin, cf. bugs g/h).
+
+### Solution durable (à implémenter)
+
+Étendre la stratégie de garde-fou (analogue à la Stratégie C de Phase 2B) aux deux autres points d'entrée trust-blind :
+
+- `handleEnrolmentWebhook` → refuser de créer un enrollment sur un user à `role = admin | superadmin` (cf. bug g)
+- SSO Dendreo (`findUserForSso`) → refuser le SSO si le `user_id` pointe sur un user admin/superadmin (cf. bug h)
+
+Dans les deux cas, fallback de récupération du « bon » learner via une voie alternative (`dendreoUserId` côté payload si Dendreo l'expose, ou lookup côté LMS via le participant Dendreo).
+
 ---
 
 ## 9. Bugs résiduels à traiter avant la prod
@@ -311,6 +351,9 @@ Cleanup manuel effectué via SQL Supabase **après** déploiement de la Phase 2B
 | d | Observabilité | Logging insuffisant des webhooks `user.created` et `enrolment.created` | Seul `session.created` produit un log structuré clair |
 | ~~e~~ | ~~Données~~ | ~~`users.dendreo_user_id` reste NULL alors qu'elle devrait être renseignée~~ | ✅ **FIXED** `c8e83fc` (option A — sync `dendreoUserId` ← `externalId` au webhook) + `8f104bd` (script de backfill `backfill-dendreo-user-id.ts` pour les rows existantes) |
 | ~~f~~ | ~~Feature~~ | ~~Bouton "Retour à Dendreo" non implémenté dans l'UI LMS~~ | ✅ **FIXED** — déjà implémenté dans [apps/web/src/app/formations/[id]/page.tsx](../apps/web/src/app/formations/[id]/page.tsx) (composant `DendreoReturnLink`, lit le cookie `dendreo_return_to` posé par l'API SSO, fallback `NEXT_PUBLIC_DENDREO_EXTRANET_URL`). Découvert pendant l'audit Phase 1. |
+| g | 🚨 BLOQUEUR PROD | `handleEnrolmentWebhook` fait confiance aveuglément au `user_id` du payload Dendreo : `prisma.user.findUnique({ where: { id: data.user_id } })` ([apps/api/src/modules/dendreo/dendreo.webhooks.service.ts:346](../apps/api/src/modules/dendreo/dendreo.webhooks.service.ts#L346)). Si Dendreo envoie un `user_id` obsolète (typiquement un admin pollué pré-Phase 2B, encore en cache côté Dendreo), l'enrollment est créé sur ce user au lieu du bon learner. Aucune vérification de cohérence (`role`, ownership). | **Solution durable** : refuser la création d'un enrollment quand le user ciblé a `role = admin | superadmin` ; pour ces cas, retrouver le bon learner via une route alternative (lookup par `dendreoUserId` du participant côté LMS, ou enrichir le payload Dendreo si possible). **Workaround actuel** : migration SQL manuelle après chaque enrolment erroné. Découvert 12/05/2026 lors des tests parcours apprenant (cf. *Limitations cache Dendreo* ci-dessus). |
+| h | 🚨 BLOQUEUR PROD | SSO Dendreo accepte un `user_id` LMS en confiance : `findUserForSso` ([apps/api/src/modules/auth/auth.service.ts](../apps/api/src/modules/auth/auth.service.ts)) fait `prisma.user.findUnique({ where: { id: lookupId } })` sans vérifier le rôle. Le JWT SSO envoyé par Dendreo embarque un `user_id` issu de son cache ; si ce cache est pollué (mapping `participant_id ↔ user_id_lms` qui pointe sur un admin), Eva (learner) se connecte avec les droits **admin**. Faille d'élévation de privilèges. | **Solution durable** (similaire à g) : refuser le SSO si le `user_id` du JWT pointe sur un user à `role = admin | superadmin` — les comptes staff se connectent via `/login` avec mot de passe, jamais via SSO Dendreo. Fallback : matcher par `dendreoUserId` (sub) si présent. **Workaround actuel** : créer un nouveau participant Dendreo avec un email distinct, ne collisionnant pas avec un user LMS existant. Découvert 12/05/2026. |
+| i | 🚨 BLOQUEUR PROD | Le mapping `participant_id ↔ user_id_lms` côté Dendreo n'est **pas invalidable depuis le LMS**. Toute donnée erronée injectée dans ce cache par le bug c (pré-Phase 2B) y reste, même après cleanup SQL côté LMS. Conséquence directe : les bugs g et h sont reproductibles à volonté tant que le cache Dendreo n'est pas reset. | **À investiguer** : Dendreo expose-t-il une API pour mettre à jour `lmsuniversel_user_id` d'un participant existant ? Si oui, écrire un script de réconciliation. Sinon, demander à Marina / support Dendreo une procédure de reset manuel du mapping (ou supprimer/recréer la fiche participant). Découvert 12/05/2026. |
 
 ---
 
@@ -322,6 +365,9 @@ Cleanup manuel effectué via SQL Supabase **après** déploiement de la Phase 2B
 - [x] ~~Tester le flow complet : participant sandbox → ADF → SSO depuis l'extranet → page formation~~ ✅
 - [x] ~~**Traiter le bloqueur prod (§9 bug c) — impératif avant tout go-live**~~ ✅ 08/05/2026 — Phase 2B, commit `5fcdf27`, tag `v0.6-dendreo-user-matching`. Cleanup compte admin Eva effectué via SQL Supabase.
 - [ ] **Investiguer la cause du vidage des tables Supabase 7-8 mai 2026** — cause inconnue, hypothèse : startup script Railway ou commande Prisma destructive lors d'un déploiement. À élucider avant le go-live prod.
+- [ ] **🚨 Bug g — sécuriser `handleEnrolmentWebhook`** : refuser de créer un enrollment sur un user à `role = admin | superadmin` (le `user_id` reçu peut être obsolète via le cache Dendreo). Fallback : retrouver le bon learner via une voie alternative. Cf. §9 bug g + *Limitations cache Dendreo*.
+- [ ] **🚨 Bug h — sécuriser le SSO Dendreo** : `findUserForSso` doit refuser le SSO quand le `user_id` du JWT pointe sur un user `admin | superadmin` (faille d'élévation de privilèges via cache Dendreo pollué). Cf. §9 bug h.
+- [ ] **🚨 Bug i — invalidation cache Dendreo** : investiguer si Dendreo expose une API pour mettre à jour `lmsuniversel_user_id` côté participant ; sinon, formaliser avec Marina / support Dendreo une procédure de reset des mappings pourris pré-Phase 2B. Cf. §9 bug i.
 - [ ] Implémenter le pull `extranet_autologin_url` au moment des relances email *(infra existante, à brancher sur le scheduler)*
 - [ ] Traiter les bugs résiduels restants en §9 (b, d) — (a, c, e, f shippés)
 - [ ] **Tester l'intégration sur la prod Dendreo** (avec un Participant + Module + ADF clairement marqués TEST), avant la bascule réelle des apprenants existants
