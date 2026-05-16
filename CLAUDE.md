@@ -2,7 +2,7 @@
 
 > LMS custom sur mesure pour The Artist Academy.
 > Remplace Dokeos. Dendreo reste l'unique porte d'entrée administrative et apprenant.
-> Dernière mise à jour : 08/05/2026
+> Dernière mise à jour : 16/05/2026
 
 ---
 
@@ -54,8 +54,7 @@ apps/api/src/lib/auth.ts           ← Validation JWT interne
 
 ### Modèle de rôles — MONO-RÔLE (post-revert Phase 2A)
 
-> ⚠️ **État actuel (07/05/2026) : revert Phase 2A en cours.**
-> Le modèle cible est `User.role: UserRole` — enum exclusif `admin | trainer | learner`.
+> ✅ **Revert Phase 2A livré (08/05/2026).** Le modèle en place est `User.role: UserRole` — enum exclusif `admin | trainer | learner`.
 > Ne PAS réintroduire `User.roles[]` ni le composant `RoleTagSelect`.
 
 - Un user a **un seul rôle** à la fois
@@ -91,23 +90,17 @@ Formation → Module(s) → UA (1 vidéo OU 1 quiz OU 1 ressource)
 
 ## ⚠️ Chantiers en cours — NE PAS interférer
 
-### 🔴 BLOQUEUR PROD — Phase 2A bis (revert multi-rôles)
+> Liste détaillée + statuts à jour : voir [Documentation/DENDREO_INTEGRATION_NOTES.md §9](Documentation/DENDREO_INTEGRATION_NOTES.md).
 
-> Décidé le 07/05/2026. À traiter avant tout go-live prod.
+### 🚨 BLOQUEURS PROD — Cache Dendreo (bugs g/h/i, découverts 12/05/2026)
 
-1. Restaurer `User.role: UserRole` (migration non-destructive : ADD `role` → backfill → DROP `roles`)
-2. Rollback payload JWT : `{ role }` (pas `{ roles }`)
-3. Retirer `RoleTagSelect` + `EditRolesSlideOver`
-4. Rotation `JWT_SECRET` post-deploy
-5. Remplacer `requireRole('trainer')` par check `Formation.trainerId === user.userId`
-6. Écran post-login switch pour admins assignés à ≥ 1 formation
+Dendreo maintient un cache `participant_id ↔ user_id_lms` qui n'est pas invalidable depuis le LMS. Toute donnée pourrie injectée pré-Phase 2B y reste, et nos handlers font confiance aveuglément au `user_id` reçu.
 
-### 🔴 Bug sécurité critique (§9 bug c)
+- **g** : `handleEnrolmentWebhook` accepte n'importe quel `user_id` du payload → enrollment créé sur un admin pollué historiquement
+- **h** : SSO Dendreo accepte n'importe quel `user_id` du JWT → **faille d'élévation de privilèges** (un apprenant se connecte avec un user_id admin en cache)
+- **i** : pas d'API exposée par Dendreo pour reset le mapping côté participant → à clarifier avec Marina
 
-> `user.created` fait un upsert sur l'email — un participant Dendreo partageant l'email d'un admin **écrase son rôle en `learner`**.
-> **Ne jamais modifier la logique d'upsert `user.created` sans résoudre ce bug.**
-> Fix attendu : matcher d'abord sur `dendreo_user_id`, jamais downgrader un rôle existant.
-> ⚠️ Pollution déjà constatée : `eva.randrianasolo@gmail.com` a reçu `externalId=2252` (participant TEST) en sandbox.
+Solution durable (analogue à la Stratégie C de Phase 2B) : refuser enrolment + SSO si le `user_id` cible pointe sur un user `admin | superadmin`, fallback de récupération du bon learner par autre voie.
 
 ### 🟡 Bugs résiduels connus
 
@@ -115,6 +108,11 @@ Formation → Module(s) → UA (1 vidéo OU 1 quiz OU 1 ressource)
 |---|---|
 | b (Race) | `enrolment.created` peut arriver avant `session.created` → enrollment sans `dendreo_session_id` |
 | d (Observabilité) | Logging insuffisant sur `user.created` et `enrolment.created` |
+
+### 📜 Historique récent (résolus)
+
+- **Phase 2A bis (revert mono-rôle)** — livré 08/05/2026. `User.role: UserRole` restauré, `RoleTagSelect` retiré, JWT payload `{ role }`. Cf. règle "MONO-RÔLE" ci-dessus.
+- **Bug c (upsert `user.created` polluait les admins par collision email)** — fixé Phase 2B (commit `5fcdf27`, tag `v0.6-dendreo-user-matching`, déployé 08/05/2026). Stratégie C en place : matching `dendreoUserId`-first, fallback email avec collision guard. **Ne pas régresser cette stratégie.**
 
 ---
 
@@ -144,7 +142,7 @@ Formation → Module(s) → UA (1 vidéo OU 1 quiz OU 1 ressource)
 - Ne jamais exposer `DENDREO_API_KEY` / `DENDREO_SIGNATURE_KEY` / `JWT_SECRET` sur le service Web
 - Ne jamais modifier `apps/web/src/middleware.ts` ou `next.config.ts` sans instruction explicite
 - Ne jamais simplifier la vérification HMAC des webhooks Dendreo
-- Ne jamais modifier la logique d'upsert `user.created` sans traiter le bug sécurité (§9 bug c)
+- Ne jamais bypasser la Stratégie C de matching dans `user.created` (dendreoUserId-first → fallback email avec collision guard → création séparée si collision) — cf. Phase 2B
 - Ne jamais supprimer de code existant sans confirmation
 - Ne jamais refactoriser ce qui n'a pas été demandé
 
